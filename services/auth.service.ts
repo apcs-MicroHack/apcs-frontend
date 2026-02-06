@@ -1,79 +1,83 @@
-import axiosInstance, { setCsrfToken, clearCsrfToken } from './axios'
+import api, { setCsrfToken, clearCsrfToken } from "./axios"
+import type { User, LoginResponse, OtpRequiredResponse } from "./types"
 
-export interface LoginCredentials {
-  email: string
-  password: string
-}
+// ── Login ────────────────────────────────────────────────────
 
-export interface LoginResponse {
-  success: boolean
-  csrfToken: string
-  user: {
-    id: string
-    email: string
-    role: 'admin' | 'operator' | 'carrier'
-    name: string
+export async function login(
+  email: string,
+  password: string,
+): Promise<LoginResponse | OtpRequiredResponse> {
+  const { data } = await api.post("/auth/login", { email, password })
+
+  // Normal login — store CSRF token & return user
+  if (data.csrfToken) {
+    setCsrfToken(data.csrfToken)
   }
-  message?: string
+
+  return data
 }
 
-export interface User {
-  id: string
-  email: string
-  role: 'admin' | 'operator' | 'carrier'
-  name: string
+// ── OTP verification (2FA) ───────────────────────────────────
+
+export async function verifyOtp(
+  userId: string,
+  otp: string,
+): Promise<LoginResponse> {
+  const { data } = await api.post("/auth/verify-otp", { userId, otp })
+  if (data.csrfToken) setCsrfToken(data.csrfToken)
+  return data
 }
 
-/**
- * Login user and set CSRF token
- */
-export const login = async (credentials: LoginCredentials): Promise<LoginResponse> => {
+// ── Token refresh ────────────────────────────────────────────
+
+export async function refreshToken(): Promise<void> {
+  const { data } = await api.post("/auth/refresh")
+  if (data.csrfToken) setCsrfToken(data.csrfToken)
+}
+
+// ── Logout ───────────────────────────────────────────────────
+
+export async function logout(): Promise<void> {
   try {
-    const response = await axiosInstance.post<LoginResponse>('/auth/login', credentials)
-    
-    // Set CSRF token for future requests
-    if (response.data.csrfToken) {
-      setCsrfToken(response.data.csrfToken)
-    }
-    
-    return response.data
-  } catch (error: any) {
-    throw new Error(error.response?.data?.message || 'Login failed')
-  }
-}
-
-/**
- * Logout user and clear CSRF token
- */
-export const logout = async (): Promise<void> => {
-  try {
-    await axiosInstance.post('/auth/logout')
-  } catch (error) {
-    console.error('Logout error:', error)
+    await api.post("/auth/logout")
   } finally {
-    // Always clear CSRF token on logout
     clearCsrfToken()
   }
 }
 
-/**
- * Get current user profile
- */
-export const getCurrentUser = async (): Promise<User> => {
-  const response = await axiosInstance.get<User>('/auth/me')
-  return response.data
+// ── Profile ──────────────────────────────────────────────────
+
+export async function getProfile(): Promise<User> {
+  const { data } = await api.get("/auth/me")
+  return data.user
 }
 
-/**
- * Request password reset
- */
-export const requestPasswordReset = async (email: string): Promise<void> => {
-  await axiosInstance.post('/auth/forgot-password', { email })
+// ── Password management ──────────────────────────────────────
+
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string,
+): Promise<void> {
+  await api.post("/auth/change-password", { currentPassword, newPassword })
 }
 
-/**
- * Reset password with token
- */
-export const resetPassword = async (token: string, newPassword: string): Promise<void> => {
-  await axiosInstance.post('/auth/reset-password', { token, newPassword })
+export async function forgotPassword(email: string): Promise<void> {
+  await api.post("/auth/forgot-password", { email })
+}
+
+export async function resetPassword(
+  token: string,
+  newPassword: string,
+): Promise<void> {
+  await api.post("/auth/reset-password", { token, newPassword })
+}
+
+// ── 2FA management ───────────────────────────────────────────
+
+export async function enable2FA(): Promise<void> {
+  await api.post("/auth/2fa/enable")
+}
+
+export async function disable2FA(otp: string): Promise<void> {
+  await api.post("/auth/2fa/disable", { otp })
 }

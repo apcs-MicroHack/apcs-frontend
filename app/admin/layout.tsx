@@ -5,6 +5,10 @@ import React from "react"
 import { useState } from "react"
 import { AdminSidebar } from "@/components/admin/admin-sidebar"
 import { AdminHeader } from "@/components/admin/admin-header"
+import { CommandPalette } from "@/components/ui/command-palette"
+import { RealtimeProvider } from "@/components/providers/realtime-provider"
+import { SecurityProvider } from "@/components/providers/security-provider"
+import { ProtectedRoute } from "@/components/auth"
 import { cn } from "@/lib/utils"
 
 export default function AdminLayout({
@@ -16,7 +20,12 @@ export default function AdminLayout({
   const [mobileOpen, setMobileOpen] = useState(false)
 
   return (
+    <SecurityProvider>
+    <ProtectedRoute roles="ADMIN">
+    <RealtimeProvider>
     <div className="min-h-screen bg-background">
+      <CommandPalette portal="admin" />
+      
       {/* Mobile overlay */}
       {mobileOpen && (
         <div
@@ -64,5 +73,8 @@ export default function AdminLayout({
         <main className="p-6">{children}</main>
       </div>
     </div>
+    </RealtimeProvider>
+    </ProtectedRoute>
+    </SecurityProvider>
   )
 }

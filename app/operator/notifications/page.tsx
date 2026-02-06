@@ -12,13 +12,12 @@ import {
   CheckCheck,
   Trash2,
   ClipboardCheck,
+  RefreshCw,
+  AlertCircle,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import {
-  Card,
-  CardContent,
-} from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import {
   Select,
   SelectContent,
@@ -26,165 +25,63 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Skeleton } from "@/components/ui/skeleton"
+import { useApi } from "@/hooks/use-api"
+import { notificationService } from "@/services"
+import type { Notification, NotificationType } from "@/services/types"
+import { useSocketEvent, useNotifications } from "@/contexts"
 
-type NotificationType = "queue" | "capacity" | "booking" | "system"
-type NotificationPriority = "high" | "medium" | "low"
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
-interface Notification {
-  id: string
-  title: string
-  message: string
-  type: NotificationType
-  priority: NotificationPriority
-  read: boolean
-  timestamp: string
-  relativeTime: string
+function relativeTime(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime()
+  const mins = Math.floor(diff / 60_000)
+  if (mins < 1) return "Just now"
+  if (mins < 60) return `${mins} min ago`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  if (days === 1) return "Yesterday"
+  return `${days} days ago`
 }
 
-const initialNotifications: Notification[] = [
-  {
-    id: "N-101",
-    title: "High volume in booking queue",
-    message: "18 bookings are pending validation for Terminal A. The queue has grown 50% in the last hour. Priority review recommended.",
-    type: "queue",
-    priority: "high",
-    read: false,
-    timestamp: "Feb 6, 2026 09:10",
-    relativeTime: "15 min ago",
-  },
-  {
-    id: "N-102",
-    title: "Terminal A 09:00 slot full",
-    message: "The 09:00-10:00 slot has reached 100% capacity (20/20 trucks). No more bookings can be accepted for this hour.",
-    type: "capacity",
-    priority: "high",
-    read: false,
-    timestamp: "Feb 6, 2026 08:55",
-    relativeTime: "30 min ago",
-  },
-  {
-    id: "N-103",
-    title: "Urgent booking requires review",
-    message: "BK-2026-0901 by MedTransport SA has been waiting 52 minutes. This is a priority cargo booking with perishable goods.",
-    type: "queue",
-    priority: "high",
-    read: false,
-    timestamp: "Feb 6, 2026 08:30",
-    relativeTime: "55 min ago",
-  },
-  {
-    id: "N-104",
-    title: "Express shipment pending",
-    message: "BK-2026-0912 by Oran Maritime is marked as urgent - vessel departing at 18:00. Needs immediate validation.",
-    type: "queue",
-    priority: "high",
-    read: false,
-    timestamp: "Feb 6, 2026 08:05",
-    relativeTime: "1 hour ago",
-  },
-  {
-    id: "N-105",
-    title: "Capacity warning: 14:00 slot",
-    message: "Terminal A 14:00-15:00 slot is at 80% capacity (16/20 trucks). Consider monitoring incoming bookings for this period.",
-    type: "capacity",
-    priority: "medium",
-    read: false,
-    timestamp: "Feb 6, 2026 07:45",
-    relativeTime: "2 hours ago",
-  },
-  {
-    id: "N-106",
-    title: "Booking BK-2026-0889 rejected",
-    message: "Booking by Atlas Shipping for the 06:00 slot was automatically flagged - carrier is currently suspended.",
-    type: "booking",
-    priority: "medium",
-    read: true,
-    timestamp: "Feb 5, 2026 14:30",
-    relativeTime: "Yesterday",
-  },
-  {
-    id: "N-107",
-    title: "Shift summary ready",
-    message: "Morning shift (06:00-14:00) completed: 48 bookings processed, 45 approved, 3 rejected. Terminal utilization averaged 82%.",
-    type: "system",
-    priority: "low",
-    read: true,
-    timestamp: "Feb 5, 2026 14:00",
-    relativeTime: "Yesterday",
-  },
-  {
-    id: "N-108",
-    title: "Terminal A capacity adjustment",
-    message: "Admin has updated the 12:00-13:00 slot capacity from 10 to 12 trucks effective Feb 6. Your terminal schedule has been updated.",
-    type: "system",
-    priority: "medium",
-    read: true,
-    timestamp: "Feb 5, 2026 11:00",
-    relativeTime: "Yesterday",
-  },
-  {
-    id: "N-109",
-    title: "Hazardous cargo booking",
-    message: "BK-2026-0910 by Djurdjura Trans contains hazardous materials. Special permit verification required before approval.",
-    type: "booking",
-    priority: "high",
-    read: true,
-    timestamp: "Feb 5, 2026 09:15",
-    relativeTime: "Yesterday",
-  },
-  {
-    id: "N-110",
-    title: "Daily target achieved",
-    message: "Terminal A processed 64 bookings yesterday, exceeding the daily target of 55. Great operational efficiency!",
-    type: "system",
-    priority: "low",
-    read: true,
-    timestamp: "Feb 5, 2026 22:00",
-    relativeTime: "Yesterday",
-  },
-]
-
-function getTypeIcon(type: NotificationType) {
-  switch (type) {
-    case "queue":
-      return <ClipboardCheck className="h-4 w-4" />
-    case "capacity":
-      return <Container className="h-4 w-4" />
-    case "booking":
-      return <Clock className="h-4 w-4" />
-    case "system":
-      return <Info className="h-4 w-4" />
-  }
+const TYPE_ICON: Record<string, React.ReactNode> = {
+  BOOKING_CREATED: <ClipboardCheck className="h-4 w-4" />,
+  BOOKING_CONFIRMED: <CheckCircle2 className="h-4 w-4" />,
+  BOOKING_REJECTED: <AlertTriangle className="h-4 w-4" />,
+  BOOKING_CANCELLED: <AlertTriangle className="h-4 w-4" />,
+  BOOKING_CONSUMED: <Container className="h-4 w-4" />,
+  BOOKING_EXPIRED: <Clock className="h-4 w-4" />,
+  SLOT_AVAILABLE: <Clock className="h-4 w-4" />,
+  SYSTEM: <Info className="h-4 w-4" />,
 }
 
-function getPriorityIcon(priority: NotificationPriority) {
-  switch (priority) {
-    case "high":
-      return <AlertTriangle className="h-3.5 w-3.5 text-[hsl(var(--destructive))]" />
-    case "medium":
-      return <Bell className="h-3.5 w-3.5 text-[hsl(var(--warning))]" />
-    case "low":
-      return <CheckCircle2 className="h-3.5 w-3.5 text-[hsl(var(--success))]" />
-  }
+function typeBadgeStyle(type: NotificationType) {
+  if (type.includes("REJECTED") || type.includes("CANCELLED") || type.includes("EXPIRED"))
+    return "bg-[hsl(var(--destructive))]/10 text-[hsl(var(--destructive))]"
+  if (type.includes("CONFIRMED") || type.includes("CONSUMED"))
+    return "bg-[hsl(var(--success))]/10 text-[hsl(var(--success))]"
+  if (type.includes("CREATED") || type.includes("SLOT"))
+    return "bg-[hsl(var(--warning))]/10 text-[hsl(var(--warning))]"
+  return "bg-muted text-muted-foreground"
 }
 
-function getTypeBadge(type: NotificationType) {
-  const map = {
-    queue: { bg: "bg-[hsl(var(--warning))]/10", text: "text-[hsl(var(--warning))]" },
-    capacity: { bg: "bg-[hsl(var(--destructive))]/10", text: "text-[hsl(var(--destructive))]" },
-    booking: { bg: "bg-[hsl(210,65%,45%)]/10", text: "text-[hsl(210,65%,45%)]" },
-    system: { bg: "bg-muted", text: "text-muted-foreground" },
-  }
-  const s = map[type]
-  return (
-    <Badge className={`border-0 ${s.bg} ${s.text} capitalize`}>
-      {type}
-    </Badge>
-  )
-}
+// ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function OperatorNotificationsPage() {
-  const [notifications, setNotifications] = useState(initialNotifications)
+  const { data: raw, loading, error, refetch } = useApi<{ notifications: Notification[] }>(
+    () => notificationService.getNotifications({ limit: 50 }),
+    [],
+  )
+
+  const { refetch: refreshContext } = useNotifications()
+
+  // Listen for new notifications and auto-refetch
+  useSocketEvent("notification:new", () => {
+    refetch()
+  })
+
+  const notifications = raw?.notifications ?? []
   const [typeFilter, setTypeFilter] = useState("all")
   const [readFilter, setReadFilter] = useState("all")
 
@@ -193,26 +90,46 @@ export default function OperatorNotificationsPage() {
       const matchesType = typeFilter === "all" || n.type === typeFilter
       const matchesRead =
         readFilter === "all" ||
-        (readFilter === "unread" && !n.read) ||
-        (readFilter === "read" && n.read)
+        (readFilter === "unread" && !n.isRead) ||
+        (readFilter === "read" && n.isRead)
       return matchesType && matchesRead
     })
   }, [notifications, typeFilter, readFilter])
 
-  const unreadCount = notifications.filter((n) => !n.read).length
+  const unreadCount = notifications.filter((n) => !n.isRead).length
 
-  const markAllRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
+  const handleMarkRead = async (id: string) => {
+    try {
+      await notificationService.markAsRead(id)
+      refetch()
+      refreshContext()
+    } catch { /* error */ }
   }
 
-  const markRead = (id: string) => {
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, read: true } : n))
+  const handleMarkAllRead = async () => {
+    try {
+      await notificationService.markAllAsRead()
+      refetch()
+      refreshContext()
+    } catch { /* error */ }
+  }
+
+  const handleDelete = async (id: string) => {
+    try {
+      await notificationService.deleteNotification(id)
+      refetch()
+      refreshContext()
+    } catch { /* error */ }
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-4 py-24">
+        <AlertCircle className="h-10 w-10 text-destructive" />
+        <p className="text-sm text-muted-foreground">{error}</p>
+        <Button variant="outline" className="gap-2" onClick={refetch}><RefreshCw className="h-4 w-4" /> Retry</Button>
+      </div>
     )
-  }
-
-  const deleteNotification = (id: string) => {
-    setNotifications((prev) => prev.filter((n) => n.id !== id))
   }
 
   return (
@@ -222,7 +139,7 @@ export default function OperatorNotificationsPage() {
         <div>
           <div className="flex items-center gap-3">
             <h1 className="font-heading text-2xl font-bold text-foreground">Notifications</h1>
-            {unreadCount > 0 && (
+            {!loading && unreadCount > 0 && (
               <Badge className="border-0 bg-[hsl(var(--destructive))]/10 text-[hsl(var(--destructive))]">
                 {unreadCount} unread
               </Badge>
@@ -232,32 +149,36 @@ export default function OperatorNotificationsPage() {
             Queue alerts, capacity warnings, and operational updates
           </p>
         </div>
-        {unreadCount > 0 && (
-          <Button variant="outline" className="gap-2 bg-transparent" onClick={markAllRead}>
-            <CheckCheck className="h-4 w-4" />
-            Mark all read
+        <div className="flex items-center gap-2">
+          {unreadCount > 0 && (
+            <Button variant="outline" className="gap-2 bg-transparent" onClick={handleMarkAllRead}>
+              <CheckCheck className="h-4 w-4" /> Mark all read
+            </Button>
+          )}
+          <Button variant="ghost" size="icon" className="h-9 w-9" onClick={refetch} disabled={loading}>
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           </Button>
-        )}
+        </div>
       </div>
 
       {/* Filters */}
       <div className="flex items-center gap-3">
         <Select value={typeFilter} onValueChange={setTypeFilter}>
-          <SelectTrigger className="h-9 w-[140px] text-sm">
-            <SelectValue placeholder="Type" />
-          </SelectTrigger>
+          <SelectTrigger className="h-9 w-[180px] text-sm"><SelectValue placeholder="Type" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Types</SelectItem>
-            <SelectItem value="queue">Queue</SelectItem>
-            <SelectItem value="capacity">Capacity</SelectItem>
-            <SelectItem value="booking">Booking</SelectItem>
-            <SelectItem value="system">System</SelectItem>
+            <SelectItem value="BOOKING_CREATED">Created</SelectItem>
+            <SelectItem value="BOOKING_CONFIRMED">Confirmed</SelectItem>
+            <SelectItem value="BOOKING_REJECTED">Rejected</SelectItem>
+            <SelectItem value="BOOKING_CANCELLED">Cancelled</SelectItem>
+            <SelectItem value="BOOKING_CONSUMED">Consumed</SelectItem>
+            <SelectItem value="BOOKING_EXPIRED">Expired</SelectItem>
+            <SelectItem value="SLOT_AVAILABLE">Slot Available</SelectItem>
+            <SelectItem value="SYSTEM">System</SelectItem>
           </SelectContent>
         </Select>
         <Select value={readFilter} onValueChange={setReadFilter}>
-          <SelectTrigger className="h-9 w-[130px] text-sm">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
+          <SelectTrigger className="h-9 w-[130px] text-sm"><SelectValue placeholder="Status" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All</SelectItem>
             <SelectItem value="unread">Unread</SelectItem>
@@ -265,13 +186,17 @@ export default function OperatorNotificationsPage() {
           </SelectContent>
         </Select>
         <p className="ml-auto text-xs text-muted-foreground">
-          {filtered.length} notification{filtered.length !== 1 ? "s" : ""}
+          {loading ? "\u2026" : `${filtered.length} notification${filtered.length !== 1 ? "s" : ""}`}
         </p>
       </div>
 
-      {/* Notification List */}
+      {/* List */}
       <div className="flex flex-col gap-3">
-        {filtered.length === 0 ? (
+        {loading ? (
+          Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i} className="border-border bg-card"><CardContent className="p-4"><Skeleton className="h-16 w-full" /></CardContent></Card>
+          ))
+        ) : filtered.length === 0 ? (
           <Card className="border-border bg-card">
             <CardContent className="flex flex-col items-center justify-center py-16">
               <Bell className="h-10 w-10 text-muted-foreground/40" />
@@ -279,50 +204,39 @@ export default function OperatorNotificationsPage() {
             </CardContent>
           </Card>
         ) : (
-          filtered.map((notification) => (
+          filtered.map((n) => (
             <Card
-              key={notification.id}
+              key={n.id}
               className={`border-border transition-colors ${
-                notification.read ? "bg-card" : "border-l-2 border-l-[hsl(210,65%,45%)] bg-[hsl(210,65%,45%)]/[0.03]"
+                n.isRead ? "bg-card" : "border-l-2 border-l-[hsl(210,65%,45%)] bg-[hsl(210,65%,45%)]/[0.03]"
               }`}
             >
               <CardContent className="p-4">
                 <div className="flex items-start gap-4">
                   <div className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
-                    notification.read
-                      ? "bg-muted text-muted-foreground"
-                      : "bg-[hsl(210,65%,45%)]/10 text-[hsl(210,65%,45%)]"
+                    n.isRead ? "bg-muted text-muted-foreground" : "bg-[hsl(210,65%,45%)]/10 text-[hsl(210,65%,45%)]"
                   }`}>
-                    {getTypeIcon(notification.type)}
+                    {TYPE_ICON[n.type] ?? <Info className="h-4 w-4" />}
                   </div>
 
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <h3 className={`text-sm ${notification.read ? "font-medium text-foreground" : "font-semibold text-foreground"}`}>
-                            {notification.title}
-                          </h3>
-                          {getPriorityIcon(notification.priority)}
-                        </div>
-                        <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-                          {notification.message}
-                        </p>
+                        <h3 className={`text-sm ${n.isRead ? "font-medium" : "font-semibold"} text-foreground`}>
+                          {n.title}
+                        </h3>
+                        <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{n.message}</p>
                         <div className="mt-2 flex items-center gap-3">
-                          {getTypeBadge(notification.type)}
-                          <span className="text-xs text-muted-foreground">{notification.relativeTime}</span>
+                          <Badge className={`border-0 text-[10px] ${typeBadgeStyle(n.type)}`}>
+                            {n.type.replace(/_/g, " ")}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">{relativeTime(n.createdAt)}</span>
                         </div>
                       </div>
 
                       <div className="flex shrink-0 items-center gap-1">
-                        {!notification.read && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={() => markRead(notification.id)}
-                            aria-label="Mark as read"
-                          >
+                        {!n.isRead && (
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleMarkRead(n.id)}>
                             <Check className="h-3.5 w-3.5" />
                           </Button>
                         )}
@@ -330,8 +244,7 @@ export default function OperatorNotificationsPage() {
                           variant="ghost"
                           size="icon"
                           className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                          onClick={() => deleteNotification(notification.id)}
-                          aria-label="Delete notification"
+                          onClick={() => handleDelete(n.id)}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>

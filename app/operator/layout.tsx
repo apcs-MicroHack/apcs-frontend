@@ -5,6 +5,10 @@ import React from "react"
 import { useState } from "react"
 import { OperatorSidebar } from "@/components/operator/operator-sidebar"
 import { OperatorHeader } from "@/components/operator/operator-header"
+import { CommandPalette } from "@/components/ui/command-palette"
+import { RealtimeProvider } from "@/components/providers/realtime-provider"
+import { SecurityProvider } from "@/components/providers/security-provider"
+import { ProtectedRoute } from "@/components/auth"
 import { cn } from "@/lib/utils"
 
 export default function OperatorLayout({
@@ -16,7 +20,12 @@ export default function OperatorLayout({
   const [mobileOpen, setMobileOpen] = useState(false)
 
   return (
+    <SecurityProvider>
+    <ProtectedRoute roles="OPERATOR">
+    <RealtimeProvider>
     <div className="min-h-screen bg-background">
+      <CommandPalette portal="operator" />
+      
       {/* Mobile overlay */}
       {mobileOpen && (
         <div
@@ -64,5 +73,8 @@ export default function OperatorLayout({
         <main className="p-6">{children}</main>
       </div>
     </div>
+    </RealtimeProvider>
+    </ProtectedRoute>
+    </SecurityProvider>
   )
 }

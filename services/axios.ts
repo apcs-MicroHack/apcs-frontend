@@ -1,96 +1,119 @@
-import axios, { AxiosError, AxiosResponse, InternalAxiosRequestConfig } from 'axios'
+import axios, {
+  AxiosError,
+  AxiosResponse,
+  InternalAxiosRequestConfig,
+} from "axios"
 
-// Create axios instance with default config
-const axiosInstance = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api',
-  withCredentials: true, // Include HTTP-only cookies
-  headers: {
-    'Content-Type': 'application/json',
-  },
+// ── Axios instance ───────────────────────────────────────────
+
+const api = axios.create({
+  baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api",
+  withCredentials: true, // send httpOnly cookies automatically
+  headers: { "Content-Type": "application/json" },
 })
 
-// CSRF token storage
-let csrfToken: string | null = null
+// ── CSRF token (persisted in localStorage so it survives page refresh) ──
 
-/**
- * Set the CSRF token (call this after login)
- */
+const CSRF_KEY = "csrf-token"
+
+function readCsrf(): string | null {
+  if (typeof window === "undefined") return null
+  return localStorage.getItem(CSRF_KEY)
+}
+
 export const setCsrfToken = (token: string) => {
-  csrfToken = token
+  if (typeof window !== "undefined") localStorage.setItem(CSRF_KEY, token)
 }
-
-/**
- * Get the current CSRF token
- */
-export const getCsrfToken = () => csrfToken
-
-/**
- * Clear the CSRF token (call this on logout)
- */
+export const getCsrfToken = () => readCsrf()
 export const clearCsrfToken = () => {
-  csrfToken = null
+  if (typeof window !== "undefined") localStorage.removeItem(CSRF_KEY)
 }
 
-// Request interceptor - Add CSRF token to all requests
-axiosInstance.interceptors.request.use(
-  (config: InternalAxiosRequestConfig) => {
-    // Add CSRF token to headers if available
-    if (csrfToken) {
-      config.headers['X-CSRF-Token'] = csrfToken
-    }
+// ── Request interceptor ──────────────────────────────────────
 
-    // Add timestamp to prevent caching on GET requests
-    if (config.method === 'get') {
-      config.params = {
-        ...config.params,
-        _t: Date.now(),
-      }
-    }
-
-    return config
-  },
-  (error: AxiosError) => {
-    return Promise.reject(error)
+api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+  const token = readCsrf()
+  if (token) {
+    config.headers["X-CSRF-Token"] = token
   }
-)
+  return config
+})
 
-// Response interceptor - Handle common errors
-axiosInstance.interceptors.response.use(
+// ── Response interceptor (auto-refresh on 401) ───────────────
+
+let isRefreshing = false
+let pendingQueue: Array<{
+  resolve: (v?: unknown) => void
+  reject: (e?: unknown) => void
+}> = []
+
+const processQueue = (error: unknown = null) => {
+  pendingQueue.forEach((p) => (error ? p.reject(error) : p.resolve()))
+  pendingQueue = []
+}
+
+api.interceptors.response.use(
   (response: AxiosResponse) => {
-    // If response contains a new CSRF token, update it
-    const newCsrfToken = response.headers['x-csrf-token']
-    if (newCsrfToken) {
-      setCsrfToken(newCsrfToken)
-    }
-
+    // Capture CSRF token from response header if present
+    const newToken = response.headers["x-csrf-token"]
+    if (newToken) setCsrfToken(newToken)
     return response
   },
-  (error: AxiosError) => {
-    // Handle 401 Unauthorized - redirect to login
-    if (error.response?.status === 401) {
-      clearCsrfToken()
-      // Only redirect if not already on login page
-      if (typeof window !== 'undefined' && window.location.pathname !== '/') {
-        window.location.href = '/'
-      }
+
+  async (error: AxiosError) => {
+    const original = error.config as InternalAxiosRequestConfig & {
+      _retry?: boolean
     }
 
-    // Handle 403 Forbidden - CSRF token might be invalid
-    if (error.response?.status === 403) {
-      const errorMessage = (error.response.data as any)?.message
-      if (errorMessage?.toLowerCase().includes('csrf')) {
+    // ── 401 → try refreshing the access token ───────────────
+    if (error.response?.status === 401 && !original._retry) {
+      // Don't try to refresh the refresh call itself
+      if (original.url?.includes("/auth/refresh")) {
         clearCsrfToken()
-        console.error('CSRF token validation failed. Please login again.')
+        if (typeof window !== "undefined" && window.location.pathname !== "/") {
+          window.location.href = "/"
+        }
+        return Promise.reject(error)
+      }
+
+      if (isRefreshing) {
+        // Queue this request until the refresh completes
+        return new Promise((resolve, reject) => {
+          pendingQueue.push({ resolve, reject })
+        }).then(() => api(original))
+      }
+
+      original._retry = true
+      isRefreshing = true
+
+      try {
+        const res = await api.post("/auth/refresh")
+        // The backend sets new cookies; capture new CSRF token
+        if (res.data?.csrfToken) setCsrfToken(res.data.csrfToken)
+        processQueue()
+        return api(original) // retry original request
+      } catch (refreshErr) {
+        processQueue(refreshErr)
+        clearCsrfToken()
+        if (typeof window !== "undefined" && window.location.pathname !== "/") {
+          window.location.href = "/"
+        }
+        return Promise.reject(refreshErr)
+      } finally {
+        isRefreshing = false
       }
     }
 
-    // Handle network errors
-    if (!error.response) {
-      console.error('Network error: Unable to reach the server')
+    // ── 403 CSRF mismatch → clear token ─────────────────────
+    if (error.response?.status === 403) {
+      const msg = (error.response.data as any)?.error ?? ""
+      if (msg.toLowerCase().includes("csrf")) {
+        clearCsrfToken()
+      }
     }
 
     return Promise.reject(error)
-  }
+  },
 )
 
-export default axiosInstance
+export default api

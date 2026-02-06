@@ -1,5 +1,6 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import {
   Card,
   CardContent,
@@ -13,46 +14,67 @@ import {
   BarChart3,
   Bell,
 } from "lucide-react"
+import { useApi } from "@/hooks/use-api"
+import { bookingService, notificationService, authService } from "@/services"
+import type { Booking } from "@/services/types"
 import Link from "next/link"
 
-const actions = [
-  {
-    label: "Review Queue",
-    description: "Process pending bookings",
-    href: "/operator/queue",
-    icon: ClipboardCheck,
-    iconBg: "bg-[hsl(var(--warning))]/10",
-    iconColor: "text-[hsl(var(--warning))]",
-    badge: "18",
-  },
-  {
-    label: "Capacity Settings",
-    description: "Adjust hourly slot limits",
-    href: "/operator/capacity",
-    icon: Settings,
-    iconBg: "bg-[hsl(185,60%,42%)]/10",
-    iconColor: "text-[hsl(185,60%,42%)]",
-  },
-  {
-    label: "View Reports",
-    description: "Terminal analytics",
-    href: "/operator/reports",
-    icon: BarChart3,
-    iconBg: "bg-[hsl(210,65%,45%)]/10",
-    iconColor: "text-[hsl(210,65%,45%)]",
-  },
-  {
-    label: "Notifications",
-    description: "Check alerts & events",
-    href: "/operator/notifications",
-    icon: Bell,
-    iconBg: "bg-[hsl(var(--destructive))]/10",
-    iconColor: "text-[hsl(var(--destructive))]",
-    badge: "5",
-  },
-]
-
 export function OperatorQuickActions() {
+  const [terminalId, setTerminalId] = useState<string | null>(null)
+
+  // Get operator's assigned terminal
+  useEffect(() => {
+    authService.getProfile().then((user) => {
+      setTerminalId(user.terminal?.id ?? user.operatorTerminals?.[0]?.terminalId ?? null)
+    })
+  }, [])
+
+  const { data: pending } = useApi<Booking[]>(
+    () => terminalId ? bookingService.getBookings({ terminalId, status: "PENDING" }) : Promise.resolve([]),
+    [terminalId],
+  )
+  const { data: unread } = useApi<number>(
+    () => notificationService.getUnreadCount(),
+    [],
+  )
+
+  const actions = [
+    {
+      label: "Review Queue",
+      description: "Process pending bookings",
+      href: "/operator/queue",
+      icon: ClipboardCheck,
+      iconBg: "bg-[hsl(var(--warning))]/10",
+      iconColor: "text-[hsl(var(--warning))]",
+      badge: pending?.length ? String(pending.length) : undefined,
+    },
+    {
+      label: "Capacity Settings",
+      description: "Adjust hourly slot limits",
+      href: "/operator/capacity",
+      icon: Settings,
+      iconBg: "bg-[hsl(185,60%,42%)]/10",
+      iconColor: "text-[hsl(185,60%,42%)]",
+    },
+    {
+      label: "View Reports",
+      description: "Terminal analytics",
+      href: "/operator/reports",
+      icon: BarChart3,
+      iconBg: "bg-[hsl(210,65%,45%)]/10",
+      iconColor: "text-[hsl(210,65%,45%)]",
+    },
+    {
+      label: "Notifications",
+      description: "Check alerts & events",
+      href: "/operator/notifications",
+      icon: Bell,
+      iconBg: "bg-[hsl(var(--destructive))]/10",
+      iconColor: "text-[hsl(var(--destructive))]",
+      badge: unread ? String(unread) : undefined,
+    },
+  ]
+
   return (
     <Card className="border-border bg-card">
       <CardHeader className="pb-2">

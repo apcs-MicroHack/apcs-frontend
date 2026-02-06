@@ -1,5 +1,6 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import { usePathname } from "next/navigation"
 import Link from "next/link"
 import {
@@ -22,6 +23,9 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { authService } from "@/services"
+import { useUnreadCount } from "@/contexts"
+import type { User } from "@/services/types"
 
 const navItems = [
   {
@@ -63,6 +67,26 @@ interface OperatorSidebarProps {
 
 export function OperatorSidebar({ collapsed, onToggle }: OperatorSidebarProps) {
   const pathname = usePathname()
+  const [user, setUser] = useState<User | null>(null)
+  const unreadCount = useUnreadCount()
+
+  useEffect(() => {
+    let mounted = true
+    authService.getProfile().then((u) => {
+      if (mounted) setUser(u)
+    }).catch(() => {})
+    return () => { mounted = false }
+  }, [])
+
+  const initials = user
+    ? `${user.firstName.charAt(0)}${user.lastName.charAt(0)}`.toUpperCase()
+    : "OP"
+  const displayName = user ? `${user.firstName} ${user.lastName}` : "Operator"
+  const displayEmail = user?.email ?? "loading…"
+  // Backend returns terminal directly for operators
+  const terminalLabel = user?.terminal
+    ? `${user.terminal.name} (${user.terminal.code})`
+    : "No terminal assigned"
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -96,6 +120,9 @@ export function OperatorSidebar({ collapsed, onToggle }: OperatorSidebarProps) {
           <ul className="flex flex-col gap-1">
             {navItems.map((item) => {
               const isActive = pathname === item.href
+              const isNotifications = item.href === "/operator/notifications"
+              const showBadge = isNotifications && unreadCount > 0
+              
               const linkContent = (
                 <Link
                   href={item.href}
@@ -107,8 +134,24 @@ export function OperatorSidebar({ collapsed, onToggle }: OperatorSidebarProps) {
                     collapsed && "justify-center px-0"
                   )}
                 >
-                  <item.icon className="h-[18px] w-[18px] shrink-0" />
-                  {!collapsed && <span>{item.label}</span>}
+                  <span className="relative">
+                    <item.icon className="h-[18px] w-[18px] shrink-0" />
+                    {showBadge && collapsed && (
+                      <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-destructive-foreground">
+                        {unreadCount > 9 ? "9+" : unreadCount}
+                      </span>
+                    )}
+                  </span>
+                  {!collapsed && (
+                    <>
+                      <span className="flex-1">{item.label}</span>
+                      {showBadge && (
+                        <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-semibold text-destructive-foreground">
+                          {unreadCount > 99 ? "99+" : unreadCount}
+                        </span>
+                      )}
+                    </>
+                  )}
                 </Link>
               )
 
@@ -137,7 +180,7 @@ export function OperatorSidebar({ collapsed, onToggle }: OperatorSidebarProps) {
               Assigned Terminal
             </p>
             <p className="mt-0.5 text-sm font-semibold text-[hsl(185,60%,55%)]">
-              Terminal A - North Quay
+              {terminalLabel}
             </p>
           </div>
         )}
@@ -167,16 +210,16 @@ export function OperatorSidebar({ collapsed, onToggle }: OperatorSidebarProps) {
           >
             <Avatar className="h-8 w-8 shrink-0">
               <AvatarFallback className="bg-[hsl(215,55%,20%)] text-xs font-semibold text-[hsl(185,60%,55%)]">
-                OP
+                {initials}
               </AvatarFallback>
             </Avatar>
             {!collapsed && (
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-[hsl(210,20%,90%)]">
-                  Karim Benali
+                  {displayName}
                 </p>
                 <p className="truncate text-[11px] text-[hsl(210,20%,55%)]">
-                  operator@apcs.dz
+                  {displayEmail}
                 </p>
               </div>
             )}

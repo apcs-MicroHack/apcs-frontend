@@ -1,11 +1,14 @@
 "use client"
 
-import { usePathname } from "next/navigation"
+import { useState } from "react"
+import { usePathname, useRouter } from "next/navigation"
 import Link from "next/link"
-import { Bell, Search, Menu, MessageSquare } from "lucide-react"
+import { Bell, Search, Menu, MessageSquare, Command } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
+import { ConnectionStatus } from "@/components/ui/connection-status"
+import { useUnreadCount } from "@/contexts"
+import { cn } from "@/lib/utils"
 
 const pageTitles: Record<string, string> = {
   "/operator": "Operator Dashboard",
@@ -22,7 +25,16 @@ interface OperatorHeaderProps {
 
 export function OperatorHeader({ onMenuToggle }: OperatorHeaderProps) {
   const pathname = usePathname()
+  const router = useRouter()
   const title = pageTitles[pathname] || "Operator Dashboard"
+  const [searchQuery, setSearchQuery] = useState("")
+  const unreadCount = useUnreadCount()
+
+  const handleSearch = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" && searchQuery.trim()) {
+      router.push(`/operator/bookings?search=${encodeURIComponent(searchQuery.trim())}`)
+    }
+  }
 
   const today = new Date()
   const formattedDate = today.toLocaleDateString("en-US", {
@@ -53,12 +65,20 @@ export function OperatorHeader({ onMenuToggle }: OperatorHeaderProps) {
       </div>
 
       <div className="flex items-center gap-3">
+        <ConnectionStatus />
+        
         <div className="relative hidden md:block">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Search bookings..."
-            className="h-9 w-64 bg-muted/50 pl-9 text-sm"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={handleSearch}
+            className="h-9 w-64 bg-muted/50 pl-9 pr-12 text-sm"
           />
+          <kbd className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 hidden select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground sm:flex">
+            <Command className="h-3 w-3" />K
+          </kbd>
         </div>
 
         <Link href="/chat">
@@ -69,10 +89,15 @@ export function OperatorHeader({ onMenuToggle }: OperatorHeaderProps) {
 
         <Link href="/operator/notifications">
           <Button variant="ghost" size="icon" className="relative" aria-label="Notifications">
-            <Bell className="h-5 w-5 text-muted-foreground" />
-            <Badge className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center bg-[hsl(var(--destructive))] p-0 text-[10px] text-[hsl(0,0%,100%)]">
-              5
-            </Badge>
+            <Bell className={cn(
+              "h-5 w-5 text-muted-foreground transition-colors",
+              unreadCount > 0 && "text-foreground"
+            )} />
+            {unreadCount > 0 && (
+              <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold text-destructive-foreground shadow-sm animate-in zoom-in-50 duration-200">
+                {unreadCount > 99 ? "99+" : unreadCount}
+              </span>
+            )}
           </Button>
         </Link>
       </div>

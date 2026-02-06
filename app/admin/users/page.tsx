@@ -11,15 +11,16 @@ import {
   Truck,
   Mail,
   Phone,
-  MapPin,
-  Ban,
-  CheckCircle2,
   Clock,
   Eye,
   EyeOff,
   Copy,
   Check,
+  CheckCircle2,
   AlertTriangle,
+  RefreshCw,
+  Trash2,
+  Loader2,
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -27,9 +28,6 @@ import { Badge } from "@/components/ui/badge"
 import {
   Card,
   CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
 } from "@/components/ui/card"
 import {
   Table,
@@ -63,156 +61,71 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Textarea } from "@/components/ui/textarea"
+import { Skeleton } from "@/components/ui/skeleton"
 
-type UserRole = "admin" | "operator" | "carrier"
-type UserStatus = "active" | "inactive" | "suspended"
+import { useApi } from "@/hooks/use-api"
+import { userService, carrierService, terminalService } from "@/services"
+import type { User, Role, Carrier, Terminal } from "@/services/types"
 
-interface UserAccount {
-  id: string
-  fullName: string
-  email: string
-  phone: string
-  role: UserRole
-  status: UserStatus
-  createdAt: string
-  lastLogin: string
-  linkedEntity?: string
+// ── Helpers ──────────────────────────────────────────────────
+
+function fullName(u: User) {
+  return `${u.firstName} ${u.lastName}`
 }
 
-const initialUsers: UserAccount[] = [
-  {
-    id: "USR-001",
-    fullName: "Admin User",
-    email: "admin@apcs.dz",
-    phone: "+213 21 00 00 01",
-    role: "admin",
-    status: "active",
-    createdAt: "Jan 10, 2024",
-    lastLogin: "Feb 6, 2026, 08:30",
-  },
-  {
-    id: "USR-002",
-    fullName: "Yacine Benmoussa",
-    email: "y.benmoussa@apcs.dz",
-    phone: "+213 21 00 00 02",
-    role: "admin",
-    status: "active",
-    createdAt: "Mar 15, 2024",
-    lastLogin: "Feb 5, 2026, 14:12",
-  },
-  {
-    id: "USR-003",
-    fullName: "Terminal A Operator",
-    email: "operator@apcs.dz",
-    phone: "+213 21 00 00 03",
-    role: "operator",
-    status: "active",
-    createdAt: "Jan 15, 2024",
-    lastLogin: "Feb 6, 2026, 07:45",
-    linkedEntity: "Terminal A",
-  },
-  {
-    id: "USR-004",
-    fullName: "Karim Medjdoub",
-    email: "k.medjdoub@apcs.dz",
-    phone: "+213 21 00 00 04",
-    role: "operator",
-    status: "active",
-    createdAt: "Apr 2, 2024",
-    lastLogin: "Feb 6, 2026, 06:50",
-    linkedEntity: "Terminal B",
-  },
-  {
-    id: "USR-005",
-    fullName: "Nadia Hamlaoui",
-    email: "n.hamlaoui@apcs.dz",
-    phone: "+213 21 00 00 05",
-    role: "operator",
-    status: "inactive",
-    createdAt: "Jun 20, 2024",
-    lastLogin: "Dec 10, 2025, 17:30",
-    linkedEntity: "Terminal C",
-  },
-  {
-    id: "USR-006",
-    fullName: "Ahmed Benali",
-    email: "contact@medtransport.dz",
-    phone: "+213 21 45 67 89",
-    role: "carrier",
-    status: "active",
-    createdAt: "Jan 15, 2024",
-    lastLogin: "Feb 6, 2026, 09:15",
-    linkedEntity: "MedTransport SA",
-  },
-  {
-    id: "USR-007",
-    fullName: "Fatima Zerhouni",
-    email: "info@algfreight.dz",
-    phone: "+213 21 55 88 12",
-    role: "carrier",
-    status: "active",
-    createdAt: "Mar 22, 2024",
-    lastLogin: "Feb 5, 2026, 16:40",
-    linkedEntity: "Algiers Freight Co",
-  },
-  {
-    id: "USR-008",
-    fullName: "Samira Boudiaf",
-    email: "contact@atlasship.dz",
-    phone: "+213 21 77 99 11",
-    role: "carrier",
-    status: "suspended",
-    createdAt: "Feb 5, 2024",
-    lastLogin: "Nov 20, 2025, 10:00",
-    linkedEntity: "Atlas Shipping",
-  },
-  {
-    id: "USR-009",
-    fullName: "Mohammed Kaci",
-    email: "ops@sahel-log.dz",
-    phone: "+213 21 33 44 55",
-    role: "carrier",
-    status: "active",
-    createdAt: "Jun 10, 2024",
-    lastLogin: "Feb 4, 2026, 11:20",
-    linkedEntity: "Sahel Logistics",
-  },
-  {
-    id: "USR-010",
-    fullName: "Leila Bensalem",
-    email: "info@oranmaritime.dz",
-    phone: "+213 41 22 33 44",
-    role: "carrier",
-    status: "active",
-    createdAt: "Apr 30, 2024",
-    lastLogin: "Feb 3, 2026, 13:55",
-    linkedEntity: "Oran Maritime",
-  },
-]
+function initials(u: User) {
+  return `${u.firstName?.[0] ?? ""}${u.lastName?.[0] ?? ""}`.toUpperCase()
+}
 
-function getRoleBadge(role: UserRole) {
-  const map: Record<UserRole, { bg: string; text: string; label: string; icon: React.ElementType }> = {
-    admin: {
-      bg: "bg-[hsl(210,65%,45%)]/10",
-      text: "text-[hsl(210,65%,45%)]",
+function formatDate(iso: string) {
+  try {
+    return new Date(iso).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    })
+  } catch {
+    return iso
+  }
+}
+
+function formatDateTime(iso: string) {
+  try {
+    return new Date(iso).toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    })
+  } catch {
+    return iso
+  }
+}
+
+function getRoleBadge(role: Role) {
+  const map: Record<Role, { bg: string; text: string; label: string; icon: React.ElementType }> = {
+    ADMIN: {
+      bg: "bg-red-500/10",
+      text: "text-red-500",
       label: "Admin",
       icon: Shield,
     },
-    operator: {
-      bg: "bg-[hsl(185,60%,42%)]/10",
-      text: "text-[hsl(185,60%,42%)]",
+    OPERATOR: {
+      bg: "bg-blue-500/10",
+      text: "text-blue-500",
       label: "Operator",
       icon: UserCog,
     },
-    carrier: {
-      bg: "bg-[hsl(var(--warning))]/10",
-      text: "text-[hsl(var(--warning))]",
+    CARRIER: {
+      bg: "bg-green-500/10",
+      text: "text-green-500",
       label: "Carrier",
       icon: Truck,
     },
   }
   const s = map[role]
+  if (!s) return <Badge variant="outline">{role}</Badge>
   return (
     <Badge className={`border-0 gap-1 ${s.bg} ${s.text}`}>
       <s.icon className="h-3 w-3" />
@@ -221,14 +134,30 @@ function getRoleBadge(role: UserRole) {
   )
 }
 
-function getStatusBadge(status: UserStatus) {
-  const map: Record<UserStatus, { bg: string; text: string; label: string }> = {
-    active: { bg: "bg-[hsl(var(--success))]/10", text: "text-[hsl(var(--success))]", label: "Active" },
-    inactive: { bg: "bg-muted", text: "text-muted-foreground", label: "Inactive" },
-    suspended: { bg: "bg-[hsl(var(--destructive))]/10", text: "text-[hsl(var(--destructive))]", label: "Suspended" },
+function getStatusBadge(isActive: boolean) {
+  if (isActive) {
+    return (
+      <Badge className="border-0 bg-[hsl(var(--success))]/10 text-[hsl(var(--success))]">
+        Active
+      </Badge>
+    )
   }
-  const s = map[status]
-  return <Badge className={`border-0 ${s.bg} ${s.text}`}>{s.label}</Badge>
+  return (
+    <Badge className="border-0 bg-muted text-muted-foreground">Inactive</Badge>
+  )
+}
+
+function avatarColor(role: Role) {
+  switch (role) {
+    case "ADMIN":
+      return "bg-red-500/10 text-red-500"
+    case "OPERATOR":
+      return "bg-blue-500/10 text-blue-500"
+    case "CARRIER":
+      return "bg-green-500/10 text-green-500"
+    default:
+      return "bg-muted text-muted-foreground"
+  }
 }
 
 function generatePassword() {
@@ -240,74 +169,162 @@ function generatePassword() {
   return password
 }
 
-export default function AdminUsersPage() {
-  const [users, setUsers] = useState<UserAccount[]>(initialUsers)
-  const [search, setSearch] = useState("")
-  const [roleFilter, setRoleFilter] = useState("all")
-  const [statusFilter, setStatusFilter] = useState("all")
-  const [addDialogOpen, setAddDialogOpen] = useState(false)
-  const [selectedUser, setSelectedUser] = useState<UserAccount | null>(null)
-  const [confirmAction, setConfirmAction] = useState<{ user: UserAccount; action: "suspend" | "activate" | "reset" } | null>(null)
+// ── Main Page ────────────────────────────────────────────────
 
-  // Add admin form
-  const [newFullName, setNewFullName] = useState("")
+export default function AdminUsersPage() {
+  const { data: users, loading, error, refetch } = useApi<User[]>(
+    () => userService.getUsers(),
+    [],
+  )
+
+  const [search, setSearch] = useState("")
+  const [roleFilter, setRoleFilter] = useState<"ALL" | Role>("ALL")
+  const [addDialogOpen, setAddDialogOpen] = useState(false)
+  const [selectedUser, setSelectedUser] = useState<User | null>(null)
+  const [confirmAction, setConfirmAction] = useState<{
+    user: User
+    action: "deactivate" | "activate" | "reset" | "delete"
+  } | null>(null)
+  const [actionLoading, setActionLoading] = useState(false)
+
+  // Add user form state
+  const [newFirstName, setNewFirstName] = useState("")
+  const [newLastName, setNewLastName] = useState("")
   const [newEmail, setNewEmail] = useState("")
   const [newPhone, setNewPhone] = useState("")
+  const [newRole, setNewRole] = useState<Role>("ADMIN")
   const [generatedPassword, setGeneratedPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [copied, setCopied] = useState(false)
   const [addSuccess, setAddSuccess] = useState(false)
+  const [addLoading, setAddLoading] = useState(false)
+  const [addError, setAddError] = useState<string | null>(null)
+
+  // Carrier / Terminal assignment
+  const [availableCarriers, setAvailableCarriers] = useState<Carrier[]>([])
+  const [availableTerminals, setAvailableTerminals] = useState<Terminal[]>([])
+  const [selectedCarrierId, setSelectedCarrierId] = useState("")
+  const [selectedTerminalId, setSelectedTerminalId] = useState("")
+  const [assignLoading, setAssignLoading] = useState(false)
+
+  const userList = users ?? []
 
   const filtered = useMemo(() => {
-    return users.filter((u) => {
+    return userList.filter((u) => {
+      const name = fullName(u).toLowerCase()
+      const q = search.toLowerCase()
       const matchesSearch =
         search === "" ||
-        u.fullName.toLowerCase().includes(search.toLowerCase()) ||
-        u.email.toLowerCase().includes(search.toLowerCase()) ||
-        u.id.toLowerCase().includes(search.toLowerCase()) ||
-        (u.linkedEntity && u.linkedEntity.toLowerCase().includes(search.toLowerCase()))
-      const matchesRole = roleFilter === "all" || u.role === roleFilter
-      const matchesStatus = statusFilter === "all" || u.status === statusFilter
-      return matchesSearch && matchesRole && matchesStatus
+        name.includes(q) ||
+        u.email.toLowerCase().includes(q) ||
+        u.id.toLowerCase().includes(q) ||
+        (u.carrier?.name && u.carrier.name.toLowerCase().includes(q))
+      const matchesRole = roleFilter === "ALL" || u.role === roleFilter
+      return matchesSearch && matchesRole
     })
-  }, [users, search, roleFilter, statusFilter])
+  }, [userList, search, roleFilter])
 
   const stats = useMemo(
     () => ({
-      total: users.length,
-      admins: users.filter((u) => u.role === "admin").length,
-      operators: users.filter((u) => u.role === "operator").length,
-      carriers: users.filter((u) => u.role === "carrier").length,
+      total: userList.length,
+      admins: userList.filter((u) => u.role === "ADMIN").length,
+      operators: userList.filter((u) => u.role === "OPERATOR").length,
+      carriers: userList.filter((u) => u.role === "CARRIER").length,
     }),
-    [users]
+    [userList],
   )
 
+  // ── Add User ───────────────────────────────────────────────
+
   const openAddDialog = () => {
-    setNewFullName("")
+    setNewFirstName("")
+    setNewLastName("")
     setNewEmail("")
     setNewPhone("")
+    setNewRole("ADMIN")
+    setSelectedCarrierId("")
+    setSelectedTerminalId("")
+    setAvailableCarriers([])
+    setAvailableTerminals([])
     setGeneratedPassword(generatePassword())
     setShowPassword(false)
     setCopied(false)
     setAddSuccess(false)
+    setAddLoading(false)
+    setAddError(null)
     setAddDialogOpen(true)
   }
 
-  const handleCreateAdmin = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!newFullName || !newEmail) return
-    const newUser: UserAccount = {
-      id: `USR-${String(users.length + 1).padStart(3, "0")}`,
-      fullName: newFullName,
-      email: newEmail,
-      phone: newPhone || "N/A",
-      role: "admin",
-      status: "active",
-      createdAt: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-      lastLogin: "Never",
+  const handleRoleChange = async (role: Role) => {
+    setNewRole(role)
+    setSelectedCarrierId("")
+    setSelectedTerminalId("")
+    if (role === "CARRIER") {
+      setAssignLoading(true)
+      try {
+        const carriers = await carrierService.getCarriers({ includeUnapproved: true, withoutUser: true })
+        setAvailableCarriers(carriers)
+      } catch { setAvailableCarriers([]) }
+      finally { setAssignLoading(false) }
+    } else if (role === "OPERATOR") {
+      setAssignLoading(true)
+      try {
+        const terminals = await terminalService.getTerminals()
+        setAvailableTerminals(terminals)
+      } catch { setAvailableTerminals([]) }
+      finally { setAssignLoading(false) }
     }
-    setUsers((prev) => [...prev, newUser])
-    setAddSuccess(true)
+  }
+
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newFirstName || !newLastName || !newEmail) return
+    if (newRole === "CARRIER" && !selectedCarrierId) return
+    if (newRole === "OPERATOR" && !selectedTerminalId) return
+
+    setAddLoading(true)
+    setAddError(null)
+    try {
+      if (newRole === "CARRIER") {
+        // Use carrier assign-user endpoint which creates user + assigns in one step
+        await carrierService.assignUser(selectedCarrierId, {
+          createUser: {
+            email: newEmail,
+            firstName: newFirstName,
+            lastName: newLastName,
+            phone: newPhone || undefined,
+            password: generatedPassword,
+          },
+        })
+      } else {
+        const created = await userService.createUser({
+          firstName: newFirstName,
+          lastName: newLastName,
+          email: newEmail,
+          phone: newPhone || undefined,
+          role: newRole,
+          password: generatedPassword,
+        })
+        // For OPERATOR, also assign to the selected terminal
+        if (newRole === "OPERATOR" && selectedTerminalId && created?.id) {
+          try {
+            await terminalService.assignOperator(selectedTerminalId, created.id)
+          } catch {
+            // assignment may have been done server-side
+          }
+        }
+      }
+      setAddSuccess(true)
+      refetch()
+    } catch (err: unknown) {
+      setAddError(
+        (err as any)?.response?.data?.error ??
+          (err as Error).message ??
+          "Failed to create user",
+      )
+    } finally {
+      setAddLoading(false)
+    }
   }
 
   const handleCopyPassword = () => {
@@ -316,19 +333,45 @@ export default function AdminUsersPage() {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const handleConfirmAction = () => {
+  // ── Confirm Actions ────────────────────────────────────────
+
+  const handleConfirmAction = async () => {
     if (!confirmAction) return
     const { user, action } = confirmAction
-    setUsers((prev) =>
-      prev.map((u) => {
-        if (u.id !== user.id) return u
-        if (action === "suspend") return { ...u, status: "suspended" as UserStatus }
-        if (action === "activate") return { ...u, status: "active" as UserStatus }
-        return u
-      })
+    setActionLoading(true)
+    try {
+      if (action === "deactivate") {
+        await userService.updateUser(user.id, { isActive: false })
+      } else if (action === "activate") {
+        await userService.updateUser(user.id, { isActive: true })
+      } else if (action === "reset") {
+        await userService.resetUserPassword(user.id)
+      } else if (action === "delete") {
+        await userService.deleteUser(user.id)
+      }
+      refetch()
+    } catch {
+      // silently handled – could add toast here
+    } finally {
+      setActionLoading(false)
+      setConfirmAction(null)
+      setSelectedUser(null)
+    }
+  }
+
+  // ── Error state ────────────────────────────────────────────
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-4 py-20">
+        <AlertTriangle className="h-10 w-10 text-destructive" />
+        <p className="text-sm text-muted-foreground">{error}</p>
+        <Button variant="outline" className="gap-2" onClick={refetch}>
+          <RefreshCw className="h-4 w-4" />
+          Retry
+        </Button>
+      </div>
     )
-    setConfirmAction(null)
-    setSelectedUser(null)
   }
 
   return (
@@ -336,32 +379,75 @@ export default function AdminUsersPage() {
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="font-heading text-2xl font-bold text-foreground">User Management</h1>
+          <h1 className="font-heading text-2xl font-bold text-foreground">
+            User Management
+          </h1>
           <p className="text-sm text-muted-foreground">
             Manage admin, operator, and carrier accounts
           </p>
         </div>
         <Button className="gap-2" onClick={openAddDialog}>
           <Plus className="h-4 w-4" />
-          Add Admin
+          Add User
         </Button>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard label="Total Users" value={stats.total} icon={CheckCircle2} color="text-[hsl(210,65%,45%)]" bg="bg-[hsl(210,65%,45%)]/10" />
-        <StatCard label="Admins" value={stats.admins} icon={Shield} color="text-[hsl(210,65%,55%)]" bg="bg-[hsl(210,65%,55%)]/10" />
-        <StatCard label="Operators" value={stats.operators} icon={UserCog} color="text-[hsl(185,60%,42%)]" bg="bg-[hsl(185,60%,42%)]/10" />
-        <StatCard label="Carriers" value={stats.carriers} icon={Truck} color="text-[hsl(var(--warning))]" bg="bg-[hsl(var(--warning))]/10" />
+        {loading ? (
+          Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i} className="border-border bg-card">
+              <CardContent className="flex items-center gap-3 p-4">
+                <Skeleton className="h-10 w-10 rounded-lg" />
+                <div className="flex flex-col gap-1">
+                  <Skeleton className="h-6 w-12" />
+                  <Skeleton className="h-3 w-16" />
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        ) : (
+          <>
+            <StatCard
+              label="Total Users"
+              value={stats.total}
+              icon={CheckCircle2}
+              color="text-[hsl(210,65%,45%)]"
+              bg="bg-[hsl(210,65%,45%)]/10"
+            />
+            <StatCard
+              label="Admins"
+              value={stats.admins}
+              icon={Shield}
+              color="text-red-500"
+              bg="bg-red-500/10"
+            />
+            <StatCard
+              label="Operators"
+              value={stats.operators}
+              icon={UserCog}
+              color="text-blue-500"
+              bg="bg-blue-500/10"
+            />
+            <StatCard
+              label="Carriers"
+              value={stats.carriers}
+              icon={Truck}
+              color="text-green-500"
+              bg="bg-green-500/10"
+            />
+          </>
+        )}
       </div>
 
       {/* Info Banner */}
       <div className="flex items-start gap-3 rounded-lg border border-[hsl(210,65%,45%)]/20 bg-[hsl(210,65%,45%)]/5 px-4 py-3">
         <Shield className="mt-0.5 h-4 w-4 shrink-0 text-[hsl(210,65%,45%)]" />
         <div className="text-sm text-foreground">
-          <span className="font-medium">Operator accounts</span> are created when adding a new terminal.{" "}
-          <span className="font-medium">Carrier accounts</span> are created when registering a new carrier.{" "}
-          Use this page to add <span className="font-medium">admin accounts</span> or manage all existing users.
+          When creating a <span className="font-medium">Carrier</span> or{" "}
+          <span className="font-medium">Operator</span> account, you must assign
+          them to an existing carrier company or terminal that has no account
+          linked to it yet.
         </div>
       </div>
 
@@ -370,32 +456,24 @@ export default function AdminUsersPage() {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search users by name, email, ID, or linked entity..."
+            placeholder="Search users by name, email, ID, or carrier..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="h-9 bg-card pl-9 text-sm"
           />
         </div>
-        <Select value={roleFilter} onValueChange={setRoleFilter}>
-          <SelectTrigger className="h-9 w-[130px] text-sm">
+        <Select
+          value={roleFilter}
+          onValueChange={(v) => setRoleFilter(v as "ALL" | Role)}
+        >
+          <SelectTrigger className="h-9 w-[140px] text-sm">
             <SelectValue placeholder="Role" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Roles</SelectItem>
-            <SelectItem value="admin">Admin</SelectItem>
-            <SelectItem value="operator">Operator</SelectItem>
-            <SelectItem value="carrier">Carrier</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="h-9 w-[130px] text-sm">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="inactive">Inactive</SelectItem>
-            <SelectItem value="suspended">Suspended</SelectItem>
+            <SelectItem value="ALL">All Roles</SelectItem>
+            <SelectItem value="ADMIN">Admin</SelectItem>
+            <SelectItem value="OPERATOR">Operator</SelectItem>
+            <SelectItem value="CARRIER">Carrier</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -406,18 +484,62 @@ export default function AdminUsersPage() {
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="pl-6 text-xs uppercase tracking-wider">User</TableHead>
-                <TableHead className="hidden text-xs uppercase tracking-wider md:table-cell">Role</TableHead>
-                <TableHead className="hidden text-xs uppercase tracking-wider lg:table-cell">Linked To</TableHead>
-                <TableHead className="hidden text-xs uppercase tracking-wider lg:table-cell">Last Login</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider">Status</TableHead>
-                <TableHead className="pr-6 text-right text-xs uppercase tracking-wider">Actions</TableHead>
+                <TableHead className="pl-6 text-xs uppercase tracking-wider">
+                  User
+                </TableHead>
+                <TableHead className="hidden text-xs uppercase tracking-wider md:table-cell">
+                  Role
+                </TableHead>
+                <TableHead className="hidden text-xs uppercase tracking-wider lg:table-cell">
+                  Linked To
+                </TableHead>
+                <TableHead className="hidden text-xs uppercase tracking-wider lg:table-cell">
+                  Last Activity
+                </TableHead>
+                <TableHead className="text-xs uppercase tracking-wider">
+                  Status
+                </TableHead>
+                <TableHead className="pr-6 text-right text-xs uppercase tracking-wider">
+                  Actions
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.length === 0 ? (
+              {loading ? (
+                Array.from({ length: 6 }).map((_, i) => (
+                  <TableRow key={i}>
+                    <TableCell className="pl-6">
+                      <div className="flex items-center gap-3">
+                        <Skeleton className="h-8 w-8 rounded-full" />
+                        <div className="flex flex-col gap-1">
+                          <Skeleton className="h-4 w-32" />
+                          <Skeleton className="h-3 w-40" />
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="hidden md:table-cell">
+                      <Skeleton className="h-5 w-20" />
+                    </TableCell>
+                    <TableCell className="hidden lg:table-cell">
+                      <Skeleton className="h-4 w-24" />
+                    </TableCell>
+                    <TableCell className="hidden lg:table-cell">
+                      <Skeleton className="h-4 w-28" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="h-5 w-16" />
+                    </TableCell>
+                    <TableCell className="pr-6 text-right">
+                      <Skeleton className="ml-auto h-8 w-8 rounded" />
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-12 text-center text-muted-foreground">
+                  <TableCell
+                    colSpan={6}
+                    className="py-12 text-center text-muted-foreground"
+                  >
                     No users found.
                   </TableCell>
                 </TableRow>
@@ -432,38 +554,38 @@ export default function AdminUsersPage() {
                       <div className="flex items-center gap-3">
                         <Avatar className="h-8 w-8">
                           <AvatarFallback
-                            className={`text-xs font-semibold ${
-                              user.role === "admin"
-                                ? "bg-[hsl(210,65%,45%)]/10 text-[hsl(210,65%,45%)]"
-                                : user.role === "operator"
-                                  ? "bg-[hsl(185,60%,42%)]/10 text-[hsl(185,60%,42%)]"
-                                  : "bg-[hsl(var(--warning))]/10 text-[hsl(var(--warning))]"
-                            }`}
+                            className={`text-xs font-semibold ${avatarColor(user.role)}`}
                           >
-                            {user.fullName
-                              .split(" ")
-                              .map((w) => w[0])
-                              .join("")
-                              .slice(0, 2)}
+                            {initials(user)}
                           </AvatarFallback>
                         </Avatar>
                         <div>
-                          <p className="text-sm font-medium text-foreground">{user.fullName}</p>
-                          <p className="text-xs text-muted-foreground">{user.email}</p>
+                          <p className="text-sm font-medium text-foreground">
+                            {fullName(user)}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {user.email}
+                          </p>
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell className="hidden md:table-cell">{getRoleBadge(user.role)}</TableCell>
+                    <TableCell className="hidden md:table-cell">
+                      {getRoleBadge(user.role)}
+                    </TableCell>
                     <TableCell className="hidden lg:table-cell">
-                      <p className="text-sm text-foreground">{user.linkedEntity || "-"}</p>
+                      <p className="text-sm text-foreground">
+                        {user.carrier?.name ?? "-"}
+                      </p>
                     </TableCell>
                     <TableCell className="hidden lg:table-cell">
                       <div className="flex items-center gap-1.5">
                         <Clock className="h-3 w-3 text-muted-foreground" />
-                        <span className="text-xs text-muted-foreground">{user.lastLogin}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {formatDateTime(user.updatedAt)}
+                        </span>
                       </div>
                     </TableCell>
-                    <TableCell>{getStatusBadge(user.status)}</TableCell>
+                    <TableCell>{getStatusBadge(user.isActive)}</TableCell>
                     <TableCell className="pr-6 text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -477,7 +599,9 @@ export default function AdminUsersPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => setSelectedUser(user)}>
+                          <DropdownMenuItem
+                            onClick={() => setSelectedUser(user)}
+                          >
                             View Details
                           </DropdownMenuItem>
                           <DropdownMenuItem
@@ -489,15 +613,15 @@ export default function AdminUsersPage() {
                             Reset Password
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          {user.status === "active" ? (
+                          {user.isActive ? (
                             <DropdownMenuItem
                               className="text-destructive"
                               onClick={(e) => {
                                 e.stopPropagation()
-                                setConfirmAction({ user, action: "suspend" })
+                                setConfirmAction({ user, action: "deactivate" })
                               }}
                             >
-                              Suspend Account
+                              Deactivate Account
                             </DropdownMenuItem>
                           ) : (
                             <DropdownMenuItem
@@ -509,6 +633,16 @@ export default function AdminUsersPage() {
                               Activate Account
                             </DropdownMenuItem>
                           )}
+                          <DropdownMenuItem
+                            className="text-destructive"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setConfirmAction({ user, action: "delete" })
+                            }}
+                          >
+                            <Trash2 className="mr-2 h-3.5 w-3.5" />
+                            Delete User
+                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
@@ -520,11 +654,13 @@ export default function AdminUsersPage() {
         </CardContent>
       </Card>
 
-      {/* User Detail Dialog */}
+      {/* ── User Detail Dialog ──────────────────────────────── */}
       <Dialog open={!!selectedUser} onOpenChange={() => setSelectedUser(null)}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle className="font-heading text-lg">User Details</DialogTitle>
+            <DialogTitle className="font-heading text-lg">
+              User Details
+            </DialogTitle>
           </DialogHeader>
           {selectedUser && (
             <div className="flex flex-col gap-4">
@@ -532,69 +668,90 @@ export default function AdminUsersPage() {
                 <div className="flex items-center gap-3">
                   <Avatar className="h-10 w-10">
                     <AvatarFallback
-                      className={`text-sm font-semibold ${
-                        selectedUser.role === "admin"
-                          ? "bg-[hsl(210,65%,45%)]/10 text-[hsl(210,65%,45%)]"
-                          : selectedUser.role === "operator"
-                            ? "bg-[hsl(185,60%,42%)]/10 text-[hsl(185,60%,42%)]"
-                            : "bg-[hsl(var(--warning))]/10 text-[hsl(var(--warning))]"
-                      }`}
+                      className={`text-sm font-semibold ${avatarColor(selectedUser.role)}`}
                     >
-                      {selectedUser.fullName
-                        .split(" ")
-                        .map((w) => w[0])
-                        .join("")
-                        .slice(0, 2)}
+                      {initials(selectedUser)}
                     </AvatarFallback>
                   </Avatar>
                   <div>
                     <p className="font-heading text-base font-semibold text-foreground">
-                      {selectedUser.fullName}
+                      {fullName(selectedUser)}
                     </p>
-                    <p className="text-xs text-muted-foreground">{selectedUser.id}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {selectedUser.id}
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
                   {getRoleBadge(selectedUser.role)}
-                  {getStatusBadge(selectedUser.status)}
+                  {getStatusBadge(selectedUser.isActive)}
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                <DetailRow icon={Mail} label="Email" value={selectedUser.email} />
-                <DetailRow icon={Phone} label="Phone" value={selectedUser.phone} />
-                {selectedUser.linkedEntity && (
+                <DetailRow
+                  icon={Mail}
+                  label="Email"
+                  value={selectedUser.email}
+                />
+                <DetailRow
+                  icon={Phone}
+                  label="Phone"
+                  value={selectedUser.phone ?? "N/A"}
+                />
+                {selectedUser.carrier?.name && (
                   <DetailRow
-                    icon={selectedUser.role === "operator" ? UserCog : Truck}
-                    label={selectedUser.role === "operator" ? "Terminal" : "Carrier Company"}
-                    value={selectedUser.linkedEntity}
+                    icon={Truck}
+                    label="Carrier Company"
+                    value={selectedUser.carrier.name}
                   />
                 )}
-                <DetailRow icon={Clock} label="Last Login" value={selectedUser.lastLogin} />
+                <DetailRow
+                  icon={Clock}
+                  label="Last Activity"
+                  value={formatDateTime(selectedUser.updatedAt)}
+                />
               </div>
 
-              <p className="text-xs text-muted-foreground">Account created on {selectedUser.createdAt}</p>
+              <p className="text-xs text-muted-foreground">
+                Account created on {formatDate(selectedUser.createdAt)}
+              </p>
 
               <DialogFooter className="gap-2 sm:gap-0">
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setConfirmAction({ user: selectedUser, action: "reset" })}
+                  onClick={() =>
+                    setConfirmAction({
+                      user: selectedUser,
+                      action: "reset",
+                    })
+                  }
                 >
                   Reset Password
                 </Button>
-                {selectedUser.status === "active" ? (
+                {selectedUser.isActive ? (
                   <Button
                     variant="destructive"
                     size="sm"
-                    onClick={() => setConfirmAction({ user: selectedUser, action: "suspend" })}
+                    onClick={() =>
+                      setConfirmAction({
+                        user: selectedUser,
+                        action: "deactivate",
+                      })
+                    }
                   >
-                    Suspend Account
+                    Deactivate Account
                   </Button>
                 ) : (
                   <Button
                     size="sm"
-                    onClick={() => setConfirmAction({ user: selectedUser, action: "activate" })}
+                    onClick={() =>
+                      setConfirmAction({
+                        user: selectedUser,
+                        action: "activate",
+                      })
+                    }
                   >
                     Activate Account
                   </Button>
@@ -605,17 +762,17 @@ export default function AdminUsersPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Add Admin Dialog */}
+      {/* ── Add User Dialog ─────────────────────────────────── */}
       <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="font-heading text-lg">
-              {addSuccess ? "Admin Account Created" : "Add Admin Account"}
+              {addSuccess ? "User Account Created" : "Add User Account"}
             </DialogTitle>
             <DialogDescription>
               {addSuccess
-                ? "The new admin account has been created. Share the credentials below."
-                : "Create a new administrator account with full system access."}
+                ? "The new account has been created. Share the credentials below."
+                : "Create a new user account."}
             </DialogDescription>
           </DialogHeader>
 
@@ -624,9 +781,11 @@ export default function AdminUsersPage() {
               <div className="flex items-center gap-3 rounded-lg border border-[hsl(var(--success))]/20 bg-[hsl(var(--success))]/5 p-4">
                 <CheckCircle2 className="h-5 w-5 shrink-0 text-[hsl(var(--success))]" />
                 <div>
-                  <p className="text-sm font-medium text-foreground">Account created successfully</p>
+                  <p className="text-sm font-medium text-foreground">
+                    Account created successfully
+                  </p>
                   <p className="text-xs text-muted-foreground">
-                    {newFullName} ({newEmail})
+                    {newFirstName} {newLastName} ({newEmail})
                   </p>
                 </div>
               </div>
@@ -638,10 +797,14 @@ export default function AdminUsersPage() {
                 <div className="flex flex-col gap-3">
                   <div>
                     <p className="text-xs text-muted-foreground">Email</p>
-                    <p className="text-sm font-medium text-foreground">{newEmail}</p>
+                    <p className="text-sm font-medium text-foreground">
+                      {newEmail}
+                    </p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">Temporary Password</p>
+                    <p className="text-xs text-muted-foreground">
+                      Temporary Password
+                    </p>
                     <div className="mt-1 flex items-center gap-2">
                       <code className="flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm font-mono text-foreground">
                         {showPassword ? generatedPassword : "••••••••••••••"}
@@ -652,7 +815,11 @@ export default function AdminUsersPage() {
                         className="h-9 w-9 shrink-0"
                         onClick={() => setShowPassword(!showPassword)}
                       >
-                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
                       </Button>
                       <Button
                         variant="outline"
@@ -674,7 +841,8 @@ export default function AdminUsersPage() {
               <div className="flex items-start gap-2 rounded-lg border border-[hsl(var(--warning))]/20 bg-[hsl(var(--warning))]/5 px-3 py-2.5">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[hsl(var(--warning))]" />
                 <p className="text-xs text-foreground">
-                  Make sure to share these credentials securely. The user will be prompted to change their password on first login.
+                  Make sure to share these credentials securely. The user will be
+                  prompted to change their password on first login.
                 </p>
               </div>
 
@@ -683,23 +851,34 @@ export default function AdminUsersPage() {
               </DialogFooter>
             </div>
           ) : (
-            <form className="flex flex-col gap-4" onSubmit={handleCreateAdmin}>
+            <form className="flex flex-col gap-4" onSubmit={handleCreateUser}>
               <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2 flex flex-col gap-2">
-                  <Label htmlFor="adminFullName">Full Name</Label>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="newFirstName">First Name</Label>
                   <Input
-                    id="adminFullName"
-                    placeholder="e.g. Amine Belkacem"
+                    id="newFirstName"
+                    placeholder="e.g. Amine"
                     className="h-9"
-                    value={newFullName}
-                    onChange={(e) => setNewFullName(e.target.value)}
+                    value={newFirstName}
+                    onChange={(e) => setNewFirstName(e.target.value)}
                     required
                   />
                 </div>
                 <div className="flex flex-col gap-2">
-                  <Label htmlFor="adminEmail">Email Address</Label>
+                  <Label htmlFor="newLastName">Last Name</Label>
                   <Input
-                    id="adminEmail"
+                    id="newLastName"
+                    placeholder="e.g. Belkacem"
+                    className="h-9"
+                    value={newLastName}
+                    onChange={(e) => setNewLastName(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="newEmail">Email Address</Label>
+                  <Input
+                    id="newEmail"
                     type="email"
                     placeholder="name@apcs.dz"
                     className="h-9"
@@ -709,15 +888,91 @@ export default function AdminUsersPage() {
                   />
                 </div>
                 <div className="flex flex-col gap-2">
-                  <Label htmlFor="adminPhone">Phone</Label>
+                  <Label htmlFor="newPhone">Phone</Label>
                   <Input
-                    id="adminPhone"
+                    id="newPhone"
                     placeholder="+213..."
                     className="h-9"
                     value={newPhone}
                     onChange={(e) => setNewPhone(e.target.value)}
                   />
                 </div>
+                <div className="col-span-2 flex flex-col gap-2">
+                  <Label htmlFor="newRole">Role</Label>
+                  <Select
+                    value={newRole}
+                    onValueChange={(v) => handleRoleChange(v as Role)}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ADMIN">Admin</SelectItem>
+                      <SelectItem value="OPERATOR">Operator</SelectItem>
+                      <SelectItem value="CARRIER">Carrier</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {newRole === "CARRIER" && (
+                  <div className="col-span-2 flex flex-col gap-2">
+                    <Label>Assign Carrier</Label>
+                    {assignLoading ? (
+                      <div className="flex items-center gap-2 h-9 px-3 rounded-md border border-input bg-background">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                        <span className="text-xs text-muted-foreground">Loading carriers…</span>
+                      </div>
+                    ) : availableCarriers.length === 0 ? (
+                      <div className="flex items-center gap-2 h-9 px-3 rounded-md border border-dashed border-[hsl(var(--warning))]/50 bg-[hsl(var(--warning))]/5">
+                        <AlertTriangle className="h-3.5 w-3.5 text-[hsl(var(--warning))]" />
+                        <span className="text-xs text-[hsl(var(--warning))]">No carriers without an account. Create a carrier first.</span>
+                      </div>
+                    ) : (
+                      <Select value={selectedCarrierId} onValueChange={setSelectedCarrierId}>
+                        <SelectTrigger className="h-9">
+                          <SelectValue placeholder="Select a carrier to assign…" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availableCarriers.map((c) => (
+                            <SelectItem key={c.id} value={c.id}>
+                              {c.companyName} — {c.registrationNumber}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
+                )}
+
+                {newRole === "OPERATOR" && (
+                  <div className="col-span-2 flex flex-col gap-2">
+                    <Label>Assign Terminal</Label>
+                    {assignLoading ? (
+                      <div className="flex items-center gap-2 h-9 px-3 rounded-md border border-input bg-background">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                        <span className="text-xs text-muted-foreground">Loading terminals…</span>
+                      </div>
+                    ) : availableTerminals.length === 0 ? (
+                      <div className="flex items-center gap-2 h-9 px-3 rounded-md border border-dashed border-[hsl(var(--warning))]/50 bg-[hsl(var(--warning))]/5">
+                        <AlertTriangle className="h-3.5 w-3.5 text-[hsl(var(--warning))]" />
+                        <span className="text-xs text-[hsl(var(--warning))]">No terminals available.</span>
+                      </div>
+                    ) : (
+                      <Select value={selectedTerminalId} onValueChange={setSelectedTerminalId}>
+                        <SelectTrigger className="h-9">
+                          <SelectValue placeholder="Select a terminal to assign…" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availableTerminals.map((t) => (
+                            <SelectItem key={t.id} value={t.id}>
+                              {t.name} ({t.code})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="rounded-lg border border-border bg-muted/50 p-4">
@@ -740,7 +995,11 @@ export default function AdminUsersPage() {
                       className="h-8 w-8"
                       onClick={() => setShowPassword(!showPassword)}
                     >
-                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      {showPassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
                     </Button>
                     <Button
                       type="button"
@@ -749,31 +1008,63 @@ export default function AdminUsersPage() {
                       className="h-8 w-8"
                       onClick={() => setGeneratedPassword(generatePassword())}
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                        <path d="M3 3v5h5" />
-                        <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
-                        <path d="M16 16h5v5" />
-                      </svg>
+                      <RefreshCw className="h-4 w-4" />
                     </Button>
                   </div>
                 </div>
               </div>
 
+              {addError && (
+                <div className="flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2">
+                  <AlertTriangle className="h-4 w-4 text-destructive" />
+                  <p className="text-xs text-destructive">{addError}</p>
+                </div>
+              )}
+
               <div className="flex items-center gap-2 rounded-lg bg-[hsl(210,65%,45%)]/5 px-3 py-2">
                 <Shield className="h-4 w-4 text-[hsl(210,65%,45%)]" />
                 <p className="text-xs text-foreground">
-                  This account will have <span className="font-semibold">full administrator privileges</span> including user management, terminal configuration, and system settings.
+                  {newRole === "ADMIN" && (
+                    <>
+                      This account will have{" "}
+                      <span className="font-semibold">
+                        full administrator privileges
+                      </span>{" "}
+                      including user management, terminal configuration, and
+                      system settings.
+                    </>
+                  )}
+                  {newRole === "OPERATOR" && (
+                    <>
+                      This account will have{" "}
+                      <span className="font-semibold">operator privileges</span>{" "}
+                      to manage terminal operations and queue assignments.
+                    </>
+                  )}
+                  {newRole === "CARRIER" && (
+                    <>
+                      This account will have{" "}
+                      <span className="font-semibold">carrier privileges</span>{" "}
+                      to manage bookings and fleet.
+                    </>
+                  )}
                 </p>
               </div>
 
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setAddDialogOpen(false)}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setAddDialogOpen(false)}
+                >
                   Cancel
                 </Button>
-                <Button type="submit" className="gap-2">
-                  <Shield className="h-4 w-4" />
-                  Create Admin Account
+                <Button type="submit" className="gap-2" disabled={addLoading}>
+                  {addLoading && (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  )}
+                  <Plus className="h-4 w-4" />
+                  Create Account
                 </Button>
               </DialogFooter>
             </form>
@@ -781,35 +1072,53 @@ export default function AdminUsersPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Confirm Action Dialog */}
+      {/* ── Confirm Action Dialog ───────────────────────────── */}
       <Dialog open={!!confirmAction} onOpenChange={() => setConfirmAction(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="font-heading text-lg">
-              {confirmAction?.action === "suspend" && "Suspend Account"}
+              {confirmAction?.action === "deactivate" && "Deactivate Account"}
               {confirmAction?.action === "activate" && "Activate Account"}
               {confirmAction?.action === "reset" && "Reset Password"}
+              {confirmAction?.action === "delete" && "Delete User"}
             </DialogTitle>
             <DialogDescription>
-              {confirmAction?.action === "suspend" &&
-                `Are you sure you want to suspend ${confirmAction.user.fullName}'s account? They will no longer be able to log in.`}
+              {confirmAction?.action === "deactivate" &&
+                `Are you sure you want to deactivate ${fullName(confirmAction.user)}'s account? They will no longer be able to log in.`}
               {confirmAction?.action === "activate" &&
-                `Reactivate ${confirmAction?.user.fullName}'s account? They will be able to log in again.`}
+                `Reactivate ${confirmAction ? fullName(confirmAction.user) : ""}'s account? They will be able to log in again.`}
               {confirmAction?.action === "reset" &&
-                `Generate a new temporary password for ${confirmAction?.user.fullName}?`}
+                `Generate a new temporary password for ${confirmAction ? fullName(confirmAction.user) : ""}?`}
+              {confirmAction?.action === "delete" &&
+                `Permanently delete ${confirmAction ? fullName(confirmAction.user) : ""}'s account? This action cannot be undone.`}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmAction(null)}>
+            <Button
+              variant="outline"
+              onClick={() => setConfirmAction(null)}
+              disabled={actionLoading}
+            >
               Cancel
             </Button>
             <Button
-              variant={confirmAction?.action === "suspend" ? "destructive" : "default"}
+              variant={
+                confirmAction?.action === "deactivate" ||
+                confirmAction?.action === "delete"
+                  ? "destructive"
+                  : "default"
+              }
               onClick={handleConfirmAction}
+              disabled={actionLoading}
+              className="gap-2"
             >
-              {confirmAction?.action === "suspend" && "Suspend"}
+              {actionLoading && (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              )}
+              {confirmAction?.action === "deactivate" && "Deactivate"}
               {confirmAction?.action === "activate" && "Activate"}
               {confirmAction?.action === "reset" && "Reset Password"}
+              {confirmAction?.action === "delete" && "Delete"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -817,6 +1126,8 @@ export default function AdminUsersPage() {
     </div>
   )
 }
+
+// ── Sub-components ───────────────────────────────────────────
 
 function StatCard({
   label,
@@ -834,11 +1145,15 @@ function StatCard({
   return (
     <Card className="border-border bg-card">
       <CardContent className="flex items-center gap-3 p-4">
-        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${bg}`}>
+        <div
+          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${bg}`}
+        >
           <Icon className={`h-5 w-5 ${color}`} />
         </div>
         <div>
-          <p className="font-heading text-xl font-bold text-foreground">{value}</p>
+          <p className="font-heading text-xl font-bold text-foreground">
+            {value}
+          </p>
           <p className="text-xs text-muted-foreground">{label}</p>
         </div>
       </CardContent>

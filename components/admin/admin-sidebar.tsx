@@ -23,6 +23,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { useUnreadCount } from "@/contexts"
 
 const navItems = [
   {
@@ -69,6 +70,7 @@ interface AdminSidebarProps {
 
 export function AdminSidebar({ collapsed, onToggle }: AdminSidebarProps) {
   const pathname = usePathname()
+  const unreadCount = useUnreadCount()
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -102,6 +104,9 @@ export function AdminSidebar({ collapsed, onToggle }: AdminSidebarProps) {
           <ul className="flex flex-col gap-1">
             {navItems.map((item) => {
               const isActive = pathname === item.href
+              const isNotifications = item.href === "/admin/notifications"
+              const showBadge = isNotifications && unreadCount > 0
+              
               const linkContent = (
                 <Link
                   href={item.href}
@@ -113,8 +118,24 @@ export function AdminSidebar({ collapsed, onToggle }: AdminSidebarProps) {
                     collapsed && "justify-center px-0"
                   )}
                 >
-                  <item.icon className="h-[18px] w-[18px] shrink-0" />
-                  {!collapsed && <span>{item.label}</span>}
+                  <span className="relative">
+                    <item.icon className="h-[18px] w-[18px] shrink-0" />
+                    {showBadge && collapsed && (
+                      <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-destructive-foreground">
+                        {unreadCount > 9 ? "9+" : unreadCount}
+                      </span>
+                    )}
+                  </span>
+                  {!collapsed && (
+                    <>
+                      <span className="flex-1">{item.label}</span>
+                      {showBadge && (
+                        <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-semibold text-destructive-foreground">
+                          {unreadCount > 99 ? "99+" : unreadCount}
+                        </span>
+                      )}
+                    </>
+                  )}
                 </Link>
               )
 

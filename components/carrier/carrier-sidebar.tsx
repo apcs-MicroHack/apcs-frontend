@@ -1,5 +1,6 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import { usePathname } from "next/navigation"
 import Link from "next/link"
 import {
@@ -23,6 +24,9 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { useUnreadCount } from "@/contexts"
+import { authService } from "@/services"
+import type { User } from "@/services/types"
 
 const navItems = [
   {
@@ -69,6 +73,25 @@ interface CarrierSidebarProps {
 
 export function CarrierSidebar({ collapsed, onToggle }: CarrierSidebarProps) {
   const pathname = usePathname()
+  const unreadCount = useUnreadCount()
+  const [user, setUser] = useState<User | null>(null)
+
+  useEffect(() => {
+    let mounted = true
+    authService.getProfile().then((u) => {
+      if (mounted) setUser(u)
+    }).catch(() => {})
+    return () => { mounted = false }
+  }, [])
+
+  // Computed display values
+  const initials = user
+    ? `${user.firstName.charAt(0)}${user.lastName.charAt(0)}`.toUpperCase()
+    : "CA"
+  const displayName = user ? `${user.firstName} ${user.lastName}` : "Carrier"
+  const displayEmail = user?.email ?? "loading…"
+  // Get company name from carrier object (supports both 'name' and 'companyName')
+  const companyName = user?.carrier?.companyName ?? user?.carrier?.name ?? "No company"
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -102,6 +125,9 @@ export function CarrierSidebar({ collapsed, onToggle }: CarrierSidebarProps) {
           <ul className="flex flex-col gap-1">
             {navItems.map((item) => {
               const isActive = pathname === item.href
+              const isNotifications = item.href === "/carrier/notifications"
+              const showBadge = isNotifications && unreadCount > 0
+              
               const linkContent = (
                 <Link
                   href={item.href}
@@ -113,8 +139,24 @@ export function CarrierSidebar({ collapsed, onToggle }: CarrierSidebarProps) {
                     collapsed && "justify-center px-0"
                   )}
                 >
-                  <item.icon className="h-[18px] w-[18px] shrink-0" />
-                  {!collapsed && <span>{item.label}</span>}
+                  <span className="relative">
+                    <item.icon className="h-[18px] w-[18px] shrink-0" />
+                    {showBadge && collapsed && (
+                      <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-destructive-foreground">
+                        {unreadCount > 9 ? "9+" : unreadCount}
+                      </span>
+                    )}
+                  </span>
+                  {!collapsed && (
+                    <>
+                      <span className="flex-1">{item.label}</span>
+                      {showBadge && (
+                        <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-semibold text-destructive-foreground">
+                          {unreadCount > 99 ? "99+" : unreadCount}
+                        </span>
+                      )}
+                    </>
+                  )}
                 </Link>
               )
 
@@ -142,8 +184,8 @@ export function CarrierSidebar({ collapsed, onToggle }: CarrierSidebarProps) {
             <p className="text-[10px] font-medium uppercase tracking-wider text-[hsl(210,20%,55%)]">
               Company
             </p>
-            <p className="mt-0.5 text-sm font-semibold text-[hsl(185,60%,55%)]">
-              MedTransport SA
+            <p className="mt-0.5 text-sm font-semibold text-[hsl(185,60%,55%)] truncate">
+              {companyName}
             </p>
           </div>
         )}
@@ -173,16 +215,16 @@ export function CarrierSidebar({ collapsed, onToggle }: CarrierSidebarProps) {
           >
             <Avatar className="h-8 w-8 shrink-0">
               <AvatarFallback className="bg-[hsl(215,55%,20%)] text-xs font-semibold text-[hsl(185,60%,55%)]">
-                MT
+                {initials}
               </AvatarFallback>
             </Avatar>
             {!collapsed && (
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-[hsl(210,20%,90%)]">
-                  Ahmed Mansouri
+                  {displayName}
                 </p>
                 <p className="truncate text-[11px] text-[hsl(210,20%,55%)]">
-                  carrier@apcs.dz
+                  {displayEmail}
                 </p>
               </div>
             )}

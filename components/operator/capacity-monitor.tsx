@@ -1,5 +1,6 @@
 "use client"
 
+import { useState, useEffect, useMemo } from "react"
 import {
   Card,
   CardContent,
@@ -7,23 +8,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-
-const timeSlots = [
-  { hour: "06:00", booked: 12, max: 15 },
-  { hour: "07:00", booked: 18, max: 20 },
-  { hour: "08:00", booked: 17, max: 20 },
-  { hour: "09:00", booked: 20, max: 20 },
-  { hour: "10:00", booked: 14, max: 20 },
-  { hour: "11:00", booked: 10, max: 18 },
-  { hour: "12:00", booked: 8, max: 12 },
-  { hour: "13:00", booked: 6, max: 12 },
-  { hour: "14:00", booked: 16, max: 20 },
-  { hour: "15:00", booked: 13, max: 20 },
-  { hour: "16:00", booked: 15, max: 18 },
-  { hour: "17:00", booked: 11, max: 15 },
-]
+import { Skeleton } from "@/components/ui/skeleton"
+import { slotService, authService } from "@/services"
+import type { AvailabilitySlot } from "@/services/types"
 
 function getHourStatus(booked: number, max: number) {
+  if (max === 0) return { color: "bg-muted", textColor: "text-muted-foreground", label: "—" }
   const pct = Math.round((booked / max) * 100)
   if (pct >= 100) return { color: "bg-[hsl(var(--destructive))]", textColor: "text-[hsl(0,0%,100%)]", label: "Full" }
   if (pct >= 85) return { color: "bg-[hsl(var(--warning))]", textColor: "text-[hsl(0,0%,100%)]", label: `${pct}%` }
@@ -31,15 +21,41 @@ function getHourStatus(booked: number, max: number) {
   return { color: "bg-[hsl(var(--success))]", textColor: "text-[hsl(0,0%,100%)]", label: `${pct}%` }
 }
 
-function isCurrentHour(hour: string) {
+function isCurrentHour(startTime: string) {
   const now = new Date()
-  const currentHour = now.getHours().toString().padStart(2, "0") + ":00"
-  return hour === currentHour
+  const currentHour = now.getHours()
+  const [h] = startTime.split(":").map(Number)
+  return h === currentHour
 }
 
 export function CapacityMonitor() {
-  const totalBooked = timeSlots.reduce((s, t) => s + t.booked, 0)
-  const totalMax = timeSlots.reduce((s, t) => s + t.max, 0)
+  const [slots, setSlots] = useState<AvailabilitySlot[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let mounted = true
+    const todayStr = new Date().toISOString().split("T")[0]
+
+    // Get operator's assigned terminal, then fetch real slot availability
+    authService.getProfile().then((user) => {
+      const terminalId = user.terminal?.id ?? user.operatorTerminals?.[0]?.terminalId
+      if (!terminalId) { if (mounted) setLoading(false); return }
+      return slotService.getAvailableSlots(terminalId, todayStr, todayStr)
+    }).then((resp) => {
+      if (!mounted || !resp) return
+      const dayData = resp.availability?.[0]
+      if (dayData && !dayData.isClosed) {
+        setSlots(dayData.slots ?? [])
+      }
+    }).catch(() => {}).finally(() => {
+      if (mounted) setLoading(false)
+    })
+
+    return () => { mounted = false }
+  }, [])
+
+  const totalBooked = slots.reduce((s, t) => s + (t.bookedCount ?? 0), 0)
+  const totalMax = slots.reduce((s, t) => s + (t.maxCapacity ?? 0), 0)
 
   return (
     <Card className="border-border bg-card">
@@ -48,43 +64,55 @@ export function CapacityMonitor() {
           Today&apos;s Capacity
         </CardTitle>
         <CardDescription>
-          Terminal A &middot; {totalBooked}/{totalMax} total slots filled
+          {totalBooked}/{totalMax} total slots used
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
-          {timeSlots.map((slot) => {
-            const status = getHourStatus(slot.booked, slot.max)
-            const current = isCurrentHour(slot.hour)
-            return (
-              <div
-                key={slot.hour}
-                className={`relative rounded-lg border p-2.5 text-center transition-colors ${
-                  current
-                    ? "border-[hsl(210,65%,45%)] bg-[hsl(210,65%,45%)]/5 ring-1 ring-[hsl(210,65%,45%)]/20"
-                    : "border-border bg-muted/30"
-                }`}
-              >
-                {current && (
-                  <div className="absolute -top-1.5 left-1/2 -translate-x-1/2">
-                    <span className="inline-flex items-center rounded-full bg-[hsl(210,65%,45%)] px-1.5 py-0 text-[8px] font-semibold text-[hsl(0,0%,100%)]">
-                      NOW
+        {loading ? (
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-20 rounded-lg" />
+            ))}
+          </div>
+        ) : slots.length === 0 ? (
+          <p className="py-6 text-center text-xs text-muted-foreground">
+            No slots configured for today.
+          </p>
+        ) : (
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-3">
+            {slots.map((slot) => {
+              const status = getHourStatus(slot.bookedCount, slot.maxCapacity)
+              const current = isCurrentHour(slot.startTime)
+              return (
+                <div
+                  key={slot.startTime}
+                  className={`relative rounded-lg border p-2.5 text-center transition-colors ${
+                    current
+                      ? "border-[hsl(210,65%,45%)] bg-[hsl(210,65%,45%)]/5 ring-1 ring-[hsl(210,65%,45%)]/20"
+                      : "border-border bg-muted/30"
+                  }`}
+                >
+                  {current && (
+                    <div className="absolute -top-1.5 left-1/2 -translate-x-1/2">
+                      <span className="inline-flex items-center rounded-full bg-[hsl(210,65%,45%)] px-1.5 py-0.5 text-[8px] font-semibold leading-none text-[hsl(0,0%,100%)]">
+                        NOW
+                      </span>
+                    </div>
+                  )}
+                  <p className="text-[11px] font-semibold text-foreground">{slot.startTime.slice(0, 5)}</p>
+                  <div className={`mx-auto mt-1.5 flex h-7 w-7 items-center justify-center rounded-full ${status.color}`}>
+                    <span className={`text-[9px] font-bold ${status.textColor}`}>
+                      {status.label}
                     </span>
                   </div>
-                )}
-                <p className="text-[11px] font-semibold text-foreground">{slot.hour}</p>
-                <div className={`mx-auto mt-1.5 flex h-7 w-7 items-center justify-center rounded-full ${status.color}`}>
-                  <span className={`text-[9px] font-bold ${status.textColor}`}>
-                    {status.label}
-                  </span>
+                  <p className="mt-1.5 text-[10px] text-muted-foreground">
+                    {slot.bookedCount}/{slot.maxCapacity}
+                  </p>
                 </div>
-                <p className="mt-1.5 text-[10px] text-muted-foreground">
-                  {slot.booked}/{slot.max}
-                </p>
-              </div>
-            )
-          })}
-        </div>
+              )
+            })}
+          </div>
+        )}
 
         {/* Legend */}
         <div className="mt-4 flex items-center justify-center gap-4">

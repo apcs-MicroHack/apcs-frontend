@@ -5,6 +5,10 @@ import React from "react"
 import { useState } from "react"
 import { CarrierSidebar } from "@/components/carrier/carrier-sidebar"
 import { CarrierHeader } from "@/components/carrier/carrier-header"
+import { CommandPalette } from "@/components/ui/command-palette"
+import { RealtimeProvider } from "@/components/providers/realtime-provider"
+import { SecurityProvider } from "@/components/providers/security-provider"
+import { ProtectedRoute } from "@/components/auth"
 import { cn } from "@/lib/utils"
 
 export default function CarrierLayout({
@@ -16,7 +20,12 @@ export default function CarrierLayout({
   const [mobileOpen, setMobileOpen] = useState(false)
 
   return (
+    <SecurityProvider>
+    <ProtectedRoute roles="CARRIER">
+    <RealtimeProvider>
     <div className="min-h-screen bg-background">
+      <CommandPalette portal="carrier" />
+      
       {/* Mobile overlay */}
       {mobileOpen && (
         <div
@@ -64,5 +73,8 @@ export default function CarrierLayout({
         <main className="p-6">{children}</main>
       </div>
     </div>
+    </RealtimeProvider>
+    </ProtectedRoute>
+    </SecurityProvider>
   )
 }
