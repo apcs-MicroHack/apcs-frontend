@@ -3,7 +3,6 @@
 import {
   ClipboardList,
   Ship,
-  TrendingUp,
   Container,
   ArrowUpRight,
   ArrowDownRight,
@@ -41,21 +40,11 @@ const kpis = [
     iconBg: "bg-[hsl(var(--warning))]/10",
     iconColor: "text-[hsl(var(--warning))]",
   },
-  {
-    label: "Revenue (MTD)",
-    value: "DA 42.8M",
-    change: "-2.3%",
-    trend: "down" as const,
-    period: "vs last month",
-    icon: TrendingUp,
-    iconBg: "bg-[hsl(var(--success))]/10",
-    iconColor: "text-[hsl(var(--success))]",
-  },
 ]
 
 export function KpiCards() {
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
       {kpis.map((kpi) => (
         <Card key={kpi.label} className="border-border bg-card">
           <CardContent className="p-5">

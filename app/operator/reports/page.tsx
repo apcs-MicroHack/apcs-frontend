@@ -123,11 +123,9 @@ export default function OperatorReportsPage() {
       </div>
 
       {/* Summary Stats */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-2">
         <SummaryCard label="Bookings Processed" value="391" change="+18.2%" trend="up" period="this week" />
-        <SummaryCard label="Avg. Processing Time" value="4.2 min" change="-15%" trend="down" period="vs last week" />
         <SummaryCard label="Approval Rate" value="93.6%" change="+2.1%" trend="up" period="vs last week" />
-        <SummaryCard label="Avg. Queue Wait" value="9.8 min" change="-22%" trend="down" period="vs last week" />
       </div>
 
       {/* Charts Row 1 */}
@@ -238,7 +236,7 @@ export default function OperatorReportsPage() {
             <CardTitle className="font-heading text-base font-semibold text-foreground">
               Top Carriers at Terminal A
             </CardTitle>
-            <CardDescription>Booking volume and average wait time</CardDescription>
+            <CardDescription>Booking volume by carrier</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex flex-col gap-3">

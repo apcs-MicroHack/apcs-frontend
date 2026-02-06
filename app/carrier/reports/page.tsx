@@ -106,10 +106,9 @@ export default function CarrierReportsPage() {
       </div>
 
       {/* Summary Stats */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
         <SummaryCard label="Total Bookings" value="52" change="+15.2%" trend="up" period="vs last month" />
         <SummaryCard label="Completion Rate" value="95.2%" change="+2.1%" trend="up" period="vs last month" />
-        <SummaryCard label="Avg. Wait Time" value="18 min" change="-5 min" trend="down" period="vs last month" />
         <SummaryCard label="Active Vehicles" value="7 / 8" change="+1" trend="up" period="vs last month" />
       </div>
 

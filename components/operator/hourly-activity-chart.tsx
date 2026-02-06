@@ -61,7 +61,7 @@ export function HourlyActivityChart() {
         <CardDescription>Hourly booking processing at Terminal A</CardDescription>
       </CardHeader>
       <CardContent>
-        <ChartContainer config={chartConfig} className="h-[260px] w-full">
+        <ChartContainer id="hourly-activity" config={chartConfig} className="h-[260px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
               data={hourlyData}

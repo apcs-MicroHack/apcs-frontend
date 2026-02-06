@@ -45,7 +45,7 @@ export function CarrierBookingChart() {
         <CardDescription>Your booking activity this week</CardDescription>
       </CardHeader>
       <CardContent>
-        <ChartContainer config={chartConfig} className="h-[220px] w-full">
+        <ChartContainer id="carrier-bookings" config={chartConfig} className="h-[220px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={weeklyData} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(214, 20%, 88%)" vertical={false} />

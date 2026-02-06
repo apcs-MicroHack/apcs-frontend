@@ -7,6 +7,13 @@ import { Eye, EyeOff, Lock, Mail, Anchor } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 export function LoginForm() {
   const [email, setEmail] = useState("")
@@ -14,6 +21,9 @@ export function LoginForm() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
+  const [showForgotPassword, setShowForgotPassword] = useState(false)
+  const [resetEmail, setResetEmail] = useState("")
+  const [resetSent, setResetSent] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -39,6 +49,24 @@ export function LoginForm() {
     }
 
     setIsLoading(false)
+  }
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsLoading(true)
+    
+    // Simulate password reset email sending
+    await new Promise((resolve) => setTimeout(resolve, 1500))
+    
+    setResetSent(true)
+    setIsLoading(false)
+    
+    // Close dialog after 3 seconds
+    setTimeout(() => {
+      setShowForgotPassword(false)
+      setResetSent(false)
+      setResetEmail("")
+    }, 3000)
   }
 
   return (
@@ -170,6 +198,7 @@ export function LoginForm() {
                 </Label>
                 <button
                   type="button"
+                  onClick={() => setShowForgotPassword(true)}
                   className="text-xs font-medium text-accent hover:text-accent/80 transition-colors"
                 >
                   Forgot password?
@@ -247,6 +276,74 @@ export function LoginForm() {
             </button>
           </p>
         </div>
+
+        {/* Forgot Password Dialog */}
+        <Dialog open={showForgotPassword} onOpenChange={setShowForgotPassword}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="font-heading text-xl font-bold">
+                Reset your password
+              </DialogTitle>
+              <DialogDescription>
+                Enter your email address and we'll send you a link to reset your password.
+              </DialogDescription>
+            </DialogHeader>
+            
+            {resetSent ? (
+              <div className="rounded-lg border border-green-500/30 bg-green-500/10 px-4 py-6 text-center">
+                <p className="text-sm font-medium text-green-600 dark:text-green-400">
+                  Password reset instructions have been sent to your email!
+                </p>
+              </div>
+            ) : (
+              <form onSubmit={handleForgotPassword} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="reset-email" className="text-sm font-medium">
+                    Email Address
+                  </Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      id="reset-email"
+                      type="email"
+                      placeholder="name@company.com"
+                      value={resetEmail}
+                      onChange={(e) => setResetEmail(e.target.value)}
+                      className="h-11 bg-muted/50 pl-10 text-foreground placeholder:text-muted-foreground focus:bg-background"
+                      required
+                    />
+                  </div>
+                </div>
+                
+                <div className="flex gap-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowForgotPassword(false)}
+                    className="flex-1"
+                    disabled={isLoading}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={isLoading}
+                    className="flex-1 bg-primary font-medium text-primary-foreground hover:bg-primary/90"
+                  >
+                    {isLoading ? (
+                      <div className="flex items-center gap-2">
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground" />
+                        Sending...
+                      </div>
+                    ) : (
+                      "Send Reset Link"
+                    )}
+                  </Button>
+                </div>
+              </form>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   )
