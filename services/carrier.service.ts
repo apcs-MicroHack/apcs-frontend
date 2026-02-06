@@ -60,14 +60,19 @@ export async function deleteCarrier(id: string): Promise<void> {
 
 // ── Assign user to carrier ───────────────────────────────────
 
+export interface AssignUserResponse {
+  carrier: Carrier
+  tempPassword?: string
+}
+
 export async function assignUser(
   carrierId: string,
   payload:
     | { existingUserId: string }
-    | { createUser: { email: string; firstName: string; lastName: string; phone?: string; password?: string } },
-): Promise<Carrier> {
+    | { createUser: { email: string; firstName: string; lastName: string; phone?: string } },
+): Promise<AssignUserResponse> {
   const { data } = await api.post(`/carriers/${carrierId}/assign-user`, payload)
-  return data.carrier ?? data
+  return { carrier: data.carrier ?? data, tempPassword: data.tempPassword }
 }
 
 // ── Unassign user from carrier ───────────────────────────────

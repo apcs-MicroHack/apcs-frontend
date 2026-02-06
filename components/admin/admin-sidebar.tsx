@@ -1,9 +1,10 @@
 "use client"
 
 import { usePathname } from "next/navigation"
+import { useState, useEffect } from "react"
 import Link from "next/link"
+import Image from "next/image"
 import {
-  Anchor,
   LayoutDashboard,
   Ship,
   Settings,
@@ -24,6 +25,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { useUnreadCount } from "@/contexts"
+import { authService } from "@/services"
+import type { User } from "@/services/types"
 
 const navItems = [
   {
@@ -71,6 +74,22 @@ interface AdminSidebarProps {
 export function AdminSidebar({ collapsed, onToggle }: AdminSidebarProps) {
   const pathname = usePathname()
   const unreadCount = useUnreadCount()
+  const [user, setUser] = useState<User | null>(null)
+
+  useEffect(() => {
+    let mounted = true
+    authService.getProfile().then((u) => {
+      if (mounted) setUser(u)
+    }).catch(() => {})
+    return () => { mounted = false }
+  }, [])
+
+  // Computed display values
+  const initials = user
+    ? `${user.firstName.charAt(0)}${user.lastName.charAt(0)}`.toUpperCase()
+    : "AD"
+  const displayName = user ? `${user.firstName} ${user.lastName}` : "Admin"
+  const displayEmail = user?.email ?? "loading…"
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -83,19 +102,15 @@ export function AdminSidebar({ collapsed, onToggle }: AdminSidebarProps) {
         {/* Logo */}
         <div className="flex h-16 items-center border-b border-sidebar-border px-4">
           <div className="flex items-center gap-3 overflow-hidden">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[hsl(185,60%,42%)]">
-              <Anchor className="h-5 w-5 text-[hsl(0,0%,100%)]" />
+            <div className="shrink-0">
+              <Image
+                src="/apcs-logo-white.svg"
+                alt="APCS Logo"
+                width={collapsed ? 40 : 140}
+                height={collapsed ? 40 : 50}
+                className={collapsed ? "h-10 w-auto" : "h-12 w-auto"}
+              />
             </div>
-            {!collapsed && (
-              <div className="min-w-0">
-                <h1 className="font-heading text-sm font-bold tracking-tight text-[hsl(0,0%,100%)]">
-                  APCS
-                </h1>
-                <p className="truncate text-[10px] text-[hsl(210,20%,60%)]">
-                  Admin Portal
-                </p>
-              </div>
-            )}
           </div>
         </div>
 
@@ -182,16 +197,16 @@ export function AdminSidebar({ collapsed, onToggle }: AdminSidebarProps) {
           >
             <Avatar className="h-8 w-8 shrink-0">
               <AvatarFallback className="bg-[hsl(215,55%,20%)] text-xs font-semibold text-[hsl(185,60%,55%)]">
-                AD
+                {initials}
               </AvatarFallback>
             </Avatar>
             {!collapsed && (
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-[hsl(210,20%,90%)]">
-                  Admin User
+                  {displayName}
                 </p>
                 <p className="truncate text-[11px] text-[hsl(210,20%,55%)]">
-                  admin@apcs.dz
+                  {displayEmail}
                 </p>
               </div>
             )}

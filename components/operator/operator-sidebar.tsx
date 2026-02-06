@@ -3,8 +3,8 @@
 import { useState, useEffect } from "react"
 import { usePathname } from "next/navigation"
 import Link from "next/link"
+import Image from "next/image"
 import {
-  Anchor,
   LayoutDashboard,
   ClipboardCheck,
   Settings,
@@ -99,19 +99,15 @@ export function OperatorSidebar({ collapsed, onToggle }: OperatorSidebarProps) {
         {/* Logo */}
         <div className="flex h-16 items-center border-b border-sidebar-border px-4">
           <div className="flex items-center gap-3 overflow-hidden">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[hsl(185,60%,42%)]">
-              <Anchor className="h-5 w-5 text-[hsl(0,0%,100%)]" />
+            <div className="shrink-0">
+              <Image
+                src="/apcs-logo-white.svg"
+                alt="APCS Logo"
+                width={collapsed ? 40 : 140}
+                height={collapsed ? 40 : 50}
+                className={collapsed ? "h-10 w-auto" : "h-12 w-auto"}
+              />
             </div>
-            {!collapsed && (
-              <div className="min-w-0">
-                <h1 className="font-heading text-sm font-bold tracking-tight text-[hsl(0,0%,100%)]">
-                  APCS
-                </h1>
-                <p className="truncate text-[10px] text-[hsl(210,20%,60%)]">
-                  Operator Portal
-                </p>
-              </div>
-            )}
           </div>
         </div>
 

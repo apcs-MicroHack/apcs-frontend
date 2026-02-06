@@ -275,14 +275,28 @@ export default function CarrierBookingsPage() {
                 </div>
               )}
 
-              {/* QR Code placeholder for confirmed bookings */}
-              {selectedBooking.status === "CONFIRMED" && (
+              {/* QR Code for confirmed bookings */}
+              {selectedBooking.status === "CONFIRMED" && selectedBooking.qrCode && (
+                <div className="flex flex-col items-center rounded-lg border border-border bg-muted/50 p-4">
+                  <div className="flex h-32 w-32 items-center justify-center rounded-lg border border-border bg-white p-2">
+                    <img 
+                      src={selectedBooking.qrCode} 
+                      alt="Booking QR Code" 
+                      className="h-full w-full object-contain"
+                    />
+                  </div>
+                  <p className="mt-2 text-xs font-medium text-foreground">Entry QR Code</p>
+                  <p className="text-[10px] text-muted-foreground">Present this at the terminal gate</p>
+                </div>
+              )}
+              {/* QR Code placeholder if not yet generated */}
+              {selectedBooking.status === "CONFIRMED" && !selectedBooking.qrCode && (
                 <div className="flex flex-col items-center rounded-lg border border-border bg-muted/50 p-4">
                   <div className="flex h-24 w-24 items-center justify-center rounded-lg border-2 border-dashed border-border bg-background">
                     <QrCode className="h-10 w-10 text-muted-foreground" />
                   </div>
-                  <p className="mt-2 text-xs font-medium text-foreground">Entry QR Code</p>
-                  <p className="text-[10px] text-muted-foreground">Present this at the terminal gate</p>
+                  <p className="mt-2 text-xs font-medium text-foreground">QR Code Generating...</p>
+                  <p className="text-[10px] text-muted-foreground">Please refresh in a moment</p>
                 </div>
               )}
 

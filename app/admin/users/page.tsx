@@ -160,15 +160,6 @@ function avatarColor(role: Role) {
   }
 }
 
-function generatePassword() {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%"
-  let password = ""
-  for (let i = 0; i < 14; i++) {
-    password += chars.charAt(Math.floor(Math.random() * chars.length))
-  }
-  return password
-}
-
 // ── Main Page ────────────────────────────────────────────────
 
 export default function AdminUsersPage() {
@@ -206,6 +197,14 @@ export default function AdminUsersPage() {
   const [selectedCarrierId, setSelectedCarrierId] = useState("")
   const [selectedTerminalId, setSelectedTerminalId] = useState("")
   const [assignLoading, setAssignLoading] = useState(false)
+
+  // Reset password result
+  const [resetPasswordResult, setResetPasswordResult] = useState<{
+    user: User
+    tempPassword: string
+  } | null>(null)
+  const [resetPasswordCopied, setResetPasswordCopied] = useState(false)
+  const [showResetPassword, setShowResetPassword] = useState(false)
 
   const userList = users ?? []
 
@@ -246,7 +245,7 @@ export default function AdminUsersPage() {
     setSelectedTerminalId("")
     setAvailableCarriers([])
     setAvailableTerminals([])
-    setGeneratedPassword(generatePassword())
+    setGeneratedPassword("")
     setShowPassword(false)
     setCopied(false)
     setAddSuccess(false)
@@ -287,28 +286,34 @@ export default function AdminUsersPage() {
     try {
       if (newRole === "CARRIER") {
         // Use carrier assign-user endpoint which creates user + assigns in one step
-        await carrierService.assignUser(selectedCarrierId, {
+        const result = await carrierService.assignUser(selectedCarrierId, {
           createUser: {
             email: newEmail,
             firstName: newFirstName,
             lastName: newLastName,
             phone: newPhone || undefined,
-            password: generatedPassword,
           },
         })
+        // Get tempPassword from backend response if available
+        if (result.tempPassword) {
+          setGeneratedPassword(result.tempPassword)
+        }
       } else {
-        const created = await userService.createUser({
+        const result = await userService.createUser({
           firstName: newFirstName,
           lastName: newLastName,
           email: newEmail,
           phone: newPhone || undefined,
           role: newRole,
-          password: generatedPassword,
         })
+        // Get tempPassword from backend response
+        if (result.tempPassword) {
+          setGeneratedPassword(result.tempPassword)
+        }
         // For OPERATOR, also assign to the selected terminal
-        if (newRole === "OPERATOR" && selectedTerminalId && created?.id) {
+        if (newRole === "OPERATOR" && selectedTerminalId && result.user?.id) {
           try {
-            await terminalService.assignOperator(selectedTerminalId, created.id)
+            await terminalService.assignOperator(selectedTerminalId, result.user.id)
           } catch {
             // assignment may have been done server-side
           }
@@ -345,7 +350,11 @@ export default function AdminUsersPage() {
       } else if (action === "activate") {
         await userService.updateUser(user.id, { isActive: true })
       } else if (action === "reset") {
-        await userService.resetUserPassword(user.id)
+        const result = await userService.resetUserPassword(user.id)
+        // Show the generated password to the admin
+        setResetPasswordResult({ user, tempPassword: result.tempPassword })
+        setShowResetPassword(false)
+        setResetPasswordCopied(false)
       } else if (action === "delete") {
         await userService.deleteUser(user.id)
       }
@@ -356,6 +365,14 @@ export default function AdminUsersPage() {
       setActionLoading(false)
       setConfirmAction(null)
       setSelectedUser(null)
+    }
+  }
+
+  const handleCopyResetPassword = () => {
+    if (resetPasswordResult?.tempPassword) {
+      navigator.clipboard.writeText(resetPasswordResult.tempPassword)
+      setResetPasswordCopied(true)
+      setTimeout(() => setResetPasswordCopied(false), 2000)
     }
   }
 
@@ -790,61 +807,74 @@ export default function AdminUsersPage() {
                 </div>
               </div>
 
-              <div className="rounded-lg border border-border bg-muted/50 p-4">
-                <p className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                  Login Credentials
-                </p>
-                <div className="flex flex-col gap-3">
-                  <div>
-                    <p className="text-xs text-muted-foreground">Email</p>
-                    <p className="text-sm font-medium text-foreground">
-                      {newEmail}
+              {generatedPassword ? (
+                <>
+                  <div className="rounded-lg border border-border bg-muted/50 p-4">
+                    <p className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                      Login Credentials
                     </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">
-                      Temporary Password
-                    </p>
-                    <div className="mt-1 flex items-center gap-2">
-                      <code className="flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm font-mono text-foreground">
-                        {showPassword ? generatedPassword : "••••••••••••••"}
-                      </code>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-9 w-9 shrink-0"
-                        onClick={() => setShowPassword(!showPassword)}
-                      >
-                        {showPassword ? (
-                          <EyeOff className="h-4 w-4" />
-                        ) : (
-                          <Eye className="h-4 w-4" />
-                        )}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-9 w-9 shrink-0"
-                        onClick={handleCopyPassword}
-                      >
-                        {copied ? (
-                          <Check className="h-4 w-4 text-[hsl(var(--success))]" />
-                        ) : (
-                          <Copy className="h-4 w-4" />
-                        )}
-                      </Button>
+                    <div className="flex flex-col gap-3">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Email</p>
+                        <p className="text-sm font-medium text-foreground">
+                          {newEmail}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">
+                          Temporary Password
+                        </p>
+                        <div className="mt-1 flex items-center gap-2">
+                          <code className="flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm font-mono text-foreground">
+                            {showPassword ? generatedPassword : "••••••••••••••"}
+                          </code>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            className="h-9 w-9 shrink-0"
+                            onClick={() => setShowPassword(!showPassword)}
+                          >
+                            {showPassword ? (
+                              <EyeOff className="h-4 w-4" />
+                            ) : (
+                              <Eye className="h-4 w-4" />
+                            )}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            className="h-9 w-9 shrink-0"
+                            onClick={handleCopyPassword}
+                          >
+                            {copied ? (
+                              <Check className="h-4 w-4 text-[hsl(var(--success))]" />
+                            ) : (
+                              <Copy className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </div>
 
-              <div className="flex items-start gap-2 rounded-lg border border-[hsl(var(--warning))]/20 bg-[hsl(var(--warning))]/5 px-3 py-2.5">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[hsl(var(--warning))]" />
-                <p className="text-xs text-foreground">
-                  Make sure to share these credentials securely. The user will be
-                  prompted to change their password on first login.
-                </p>
-              </div>
+                  <div className="flex items-start gap-2 rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2.5">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+                    <p className="text-xs text-foreground">
+                      <span className="font-semibold">Save this password now!</span> This is the only time you will see it. 
+                      Share it securely with the user. They will be prompted to change it on first login.
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-start gap-2 rounded-lg border border-[hsl(210,65%,45%)]/20 bg-[hsl(210,65%,45%)]/5 px-3 py-2.5">
+                  <Shield className="mt-0.5 h-4 w-4 shrink-0 text-[hsl(210,65%,45%)]" />
+                  <p className="text-xs text-foreground">
+                    A temporary password has been generated by the system. Use the{" "}
+                    <span className="font-semibold">Reset Password</span> action from the user menu to generate 
+                    a new password that you can share with the user.
+                  </p>
+                </div>
+              )}
 
               <DialogFooter>
                 <Button onClick={() => setAddDialogOpen(false)}>Done</Button>
@@ -975,45 +1005,6 @@ export default function AdminUsersPage() {
                 )}
               </div>
 
-              <div className="rounded-lg border border-border bg-muted/50 p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                      Generated Password
-                    </p>
-                    <div className="mt-1 flex items-center gap-2">
-                      <code className="text-sm font-mono text-foreground">
-                        {showPassword ? generatedPassword : "••••••••••••••"}
-                      </code>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => setShowPassword(!showPassword)}
-                    >
-                      {showPassword ? (
-                        <EyeOff className="h-4 w-4" />
-                      ) : (
-                        <Eye className="h-4 w-4" />
-                      )}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => setGeneratedPassword(generatePassword())}
-                    >
-                      <RefreshCw className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              </div>
-
               {addError && (
                 <div className="flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2">
                   <AlertTriangle className="h-4 w-4 text-destructive" />
@@ -1120,6 +1111,82 @@ export default function AdminUsersPage() {
               {confirmAction?.action === "reset" && "Reset Password"}
               {confirmAction?.action === "delete" && "Delete"}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Reset Password Result Dialog ────────────────────── */}
+      <Dialog open={!!resetPasswordResult} onOpenChange={() => setResetPasswordResult(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-heading text-lg">
+              Password Reset Complete
+            </DialogTitle>
+            <DialogDescription>
+              A new temporary password has been generated for{" "}
+              {resetPasswordResult ? fullName(resetPasswordResult.user) : ""}.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center gap-3 rounded-lg border border-[hsl(var(--success))]/20 bg-[hsl(var(--success))]/5 p-4">
+              <CheckCircle2 className="h-5 w-5 shrink-0 text-[hsl(var(--success))]" />
+              <div>
+                <p className="text-sm font-medium text-foreground">
+                  Password reset successfully
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {resetPasswordResult?.user.email}
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-border bg-muted/50 p-4">
+              <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                New Temporary Password
+              </p>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm font-mono text-foreground">
+                  {showResetPassword ? resetPasswordResult?.tempPassword : "••••••••••••••"}
+                </code>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-9 w-9 shrink-0"
+                  onClick={() => setShowResetPassword(!showResetPassword)}
+                >
+                  {showResetPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-9 w-9 shrink-0"
+                  onClick={handleCopyResetPassword}
+                >
+                  {resetPasswordCopied ? (
+                    <Check className="h-4 w-4 text-[hsl(var(--success))]" />
+                  ) : (
+                    <Copy className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-2 rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2.5">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+              <p className="text-xs text-foreground">
+                <span className="font-semibold">Save this password now!</span> This is the only time you will see it.
+                Share it securely with the user. They will be prompted to change it on next login.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button onClick={() => setResetPasswordResult(null)}>Done</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

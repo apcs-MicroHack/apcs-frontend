@@ -3,7 +3,8 @@
 import React from "react"
 
 import { useState } from "react"
-import { Eye, EyeOff, Lock, Mail, Anchor } from "lucide-react"
+import Image from "next/image"
+import { Eye, EyeOff, Lock, Mail } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -213,17 +214,13 @@ export function LoginForm() {
         <div className="relative z-10 flex h-full flex-col justify-between p-10">
           {/* Logo area */}
           <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-[hsl(185,60%,42%)]">
-              <Anchor className="h-6 w-6 text-[hsl(0,0%,100%)]" />
-            </div>
-            <div>
-              <h1 className="font-heading text-xl font-bold tracking-tight text-[hsl(0,0%,100%)]">
-                APCS
-              </h1>
-              <p className="text-xs text-[hsl(210,20%,75%)]">
-                Algiers Port Container Service
-              </p>
-            </div>
+            <Image
+              src="/apcs-logo-white.svg"
+              alt="APCS Logo"
+              width={200}
+              height={80}
+              className="h-20 w-auto"
+            />
           </div>
 
           {/* Center content */}
@@ -274,18 +271,14 @@ export function LoginForm() {
       {/* Right panel - Login Form */}
       <div className="flex w-full flex-col items-center justify-center bg-background px-6 lg:w-[45%] lg:px-16">
         {/* Mobile logo */}
-        <div className="mb-8 flex items-center gap-3 lg:hidden">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
-            <Anchor className="h-5 w-5 text-primary-foreground" />
-          </div>
-          <div>
-            <h1 className="font-heading text-lg font-bold text-foreground">
-              APCS
-            </h1>
-            <p className="text-xs text-muted-foreground">
-              Algiers Port Container Service
-            </p>
-          </div>
+        <div className="mb-8 flex items-center justify-center lg:hidden">
+          <Image
+            src="/apcs-logo.svg"
+            alt="APCS Logo"
+            width={160}
+            height={60}
+            className="h-14 w-auto"
+          />
         </div>
 
         <div className="w-full max-w-sm">

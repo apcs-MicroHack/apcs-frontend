@@ -39,7 +39,6 @@ export interface CreateUserPayload {
   lastName: string
   role: Role
   phone?: string
-  password: string
   carrierId?: string
   terminalId?: string
   carrierDetails?: {
@@ -51,9 +50,14 @@ export interface CreateUserPayload {
   }
 }
 
-export async function createUser(payload: CreateUserPayload): Promise<User> {
+export interface CreateUserResponse {
+  user: User
+  tempPassword: string
+}
+
+export async function createUser(payload: CreateUserPayload): Promise<CreateUserResponse> {
   const { data } = await api.post("/users", payload)
-  return data.user
+  return { user: data.user, tempPassword: data.tempPassword }
 }
 
 export async function updateUser(
@@ -70,8 +74,13 @@ export async function deleteUser(id: string): Promise<void> {
 
 // ── Admin actions ────────────────────────────────────────────
 
-export async function resetUserPassword(id: string): Promise<void> {
-  await api.post(`/users/${id}/reset-password`)
+export interface ResetPasswordResponse {
+  tempPassword: string
+}
+
+export async function resetUserPassword(id: string): Promise<ResetPasswordResponse> {
+  const { data } = await api.post(`/users/${id}/reset-password`)
+  return { tempPassword: data.tempPassword }
 }
 
 export async function approveCarrier(id: string): Promise<void> {
