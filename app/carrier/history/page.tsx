@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import {
   Clock,
   Search,
@@ -64,59 +64,49 @@ const STATUS_LABELS: Record<string, string> = {
 
 const PER_PAGE = 10
 
-// Get last 90 days date range for history
-function getHistoryDateRange(): { startDate: string; endDate: string } {
-  const now = new Date()
-  const end = now.toISOString().split("T")[0]
-  const start = new Date(now)
-  start.setDate(start.getDate() - 90)
-  return { startDate: start.toISOString().split("T")[0], endDate: end }
-}
-
 export default function HistoryPage() {
-  const dateRange = useMemo(() => getHistoryDateRange(), [])
-
-  // Fetch bookings from last 90 days (backend caps at 100/page)
-  const { data, loading, error, refetch } = useApi<PaginatedBookingsResponse>(
-    () => bookingService.getBookings({ startDate: dateRange.startDate, endDate: dateRange.endDate, limit: 100 }),
-    [dateRange.startDate, dateRange.endDate],
-  )
-  
-  // Filter to only history statuses
-  const historyBookings = useMemo(() => {
-    const bookings = data?.bookings ?? []
-    return bookings.filter(b => 
-      HISTORY_STATUSES.includes(b.status as typeof HISTORY_STATUSES[number])
-    )
-  }, [data])
-
-  const [search, setSearch] = useState("")
-  const [statusFilter, setStatusFilter] = useState("all")
+  const [searchInput, setSearchInput] = useState("")
+  const [search, setSearch] = useState("") // Debounced search value
+  const [statusFilter, setStatusFilter] = useState<string>("all")
   const [page, setPage] = useState(1)
   const [selected, setSelected] = useState<Booking | null>(null)
 
-  const filtered = useMemo(() => {
-    return (historyBookings ?? []).filter((b) => {
-      const q = search.toLowerCase()
-      const matchSearch = !q ||
-        b.bookingNumber.toLowerCase().includes(q) ||
-        (b.containerNumber ?? "").toLowerCase().includes(q) ||
-        b.terminal?.name?.toLowerCase().includes(q) ||
-        b.truck?.plateNumber?.toLowerCase().includes(q)
-      const matchStatus = statusFilter === "all" || b.status === statusFilter
-      return matchSearch && matchStatus
-    })
-  }, [historyBookings, search, statusFilter])
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearch(searchInput)
+      setPage(1)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [searchInput])
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE))
-  const paginated = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE)
+  // Build statuses filter: if "all", use all history statuses; otherwise use the selected one
+  const statusesToFetch = statusFilter === "all" 
+    ? [...HISTORY_STATUSES] 
+    : [statusFilter as typeof HISTORY_STATUSES[number]]
+
+  // Fetch bookings with server-side pagination and status filter
+  const { data, loading, error, refetch } = useApi<PaginatedBookingsResponse>(
+    () => bookingService.getBookings({ 
+      statuses: statusesToFetch,
+      search: search || undefined,
+      page,
+      limit: PER_PAGE,
+    }),
+    [statusFilter, search, page],
+  )
+  
+  const bookings = data?.bookings ?? []
+  const pagination = data?.pagination
+  const totalPages = pagination?.totalPages ?? 1
+  const totalCount = pagination?.totalCount ?? bookings.length
 
   const stats = useMemo(() => ({
-    total: (historyBookings ?? []).length,
-    completed: (historyBookings ?? []).filter((b) => b.status === "CONSUMED").length,
-    cancelled: (historyBookings ?? []).filter((b) => b.status === "CANCELLED").length,
-    rejected: (historyBookings ?? []).filter((b) => b.status === "REJECTED").length,
-  }), [historyBookings])
+    total: totalCount,
+    completed: bookings.filter((b) => b.status === "CONSUMED").length,
+    cancelled: bookings.filter((b) => b.status === "CANCELLED").length,
+    rejected: bookings.filter((b) => b.status === "REJECTED").length,
+  }), [bookings, totalCount])
 
   if (loading) {
     return (
@@ -175,7 +165,7 @@ export default function HistoryPage() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input placeholder="Search by booking, container, terminal, plate..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1) }} className="h-10 pl-10" />
+          <Input placeholder="Search by booking, container, terminal, plate..." value={searchInput} onChange={(e) => setSearchInput(e.target.value)} className="h-10 pl-10" />
         </div>
         <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1) }}>
           <SelectTrigger className="h-10 w-[180px]"><Filter className="mr-2 h-4 w-4 text-muted-foreground" /><SelectValue /></SelectTrigger>
@@ -187,7 +177,7 @@ export default function HistoryPage() {
       </div>
 
       {/* Table */}
-      {paginated.length === 0 ? (
+      {bookings.length === 0 ? (
         <Card className="border-border bg-card">
           <CardContent className="flex flex-col items-center justify-center py-16">
             <div className="rounded-full bg-muted p-4">
@@ -224,7 +214,7 @@ export default function HistoryPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {paginated.map((b) => (
+                {bookings.map((b) => (
                   <TableRow key={b.id} className="border-border">
                     <TableCell className="font-mono text-xs font-semibold text-foreground">{b.bookingNumber}</TableCell>
                     <TableCell className="text-xs text-muted-foreground">{b.terminal?.name ?? "\u2014"}</TableCell>
@@ -254,7 +244,7 @@ export default function HistoryPage() {
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
-          <p className="text-xs text-muted-foreground">Showing {(page - 1) * PER_PAGE + 1}-{Math.min(page * PER_PAGE, filtered.length)} of {filtered.length}</p>
+          <p className="text-xs text-muted-foreground">Showing {(page - 1) * PER_PAGE + 1}-{Math.min(page * PER_PAGE, totalCount)} of {totalCount}</p>
           <div className="flex items-center gap-1">
             <Button variant="outline" size="icon" className="h-8 w-8" disabled={page <= 1} onClick={() => setPage(page - 1)}>
               <ChevronLeft className="h-4 w-4" />
