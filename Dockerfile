@@ -5,9 +5,9 @@ FROM node:20-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json* pnpm-lock.yaml* ./
 RUN \
-  if [ -f package-lock.json ]; then npm ci; \
+  if [ -f package-lock.json ]; then npm ci --legacy-peer-deps; \
   elif [ -f pnpm-lock.yaml ]; then npm install -g pnpm && pnpm install; \
-  else npm install; fi
+  else npm install --legacy-peer-deps; fi
 
 # 2. Rebuild the source code only when needed
 FROM node:20-alpine AS builder
@@ -28,7 +28,6 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./package.json
-COPY --from=builder /app/.env.local ./.env.local
 
 USER nextjs
 
