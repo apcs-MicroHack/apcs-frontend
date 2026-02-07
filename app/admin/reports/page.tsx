@@ -41,6 +41,7 @@ import { PageTransition } from "@/components/ui/page-transition"
 import { AutoRefresh } from "@/components/ui/auto-refresh"
 import { useApi } from "@/hooks/use-api"
 import { bookingService } from "@/services"
+import type { PaginatedBookingsResponse } from "@/services/booking.service"
 import type { Booking, BookingStatus } from "@/services/types"
 
 // ── Status color map ─────────────────────────────────────────
@@ -105,14 +106,14 @@ function getRangeCutoff(range: RangeKey): Date {
 export default function AdminReportsPage() {
   const [range, setRange] = useState<RangeKey>("30d")
 
-  const { data: allBookings, loading, error, refetch } = useApi<Booking[]>(
+  const { data, loading, error, refetch } = useApi<PaginatedBookingsResponse>(
     () => bookingService.getBookings(),
     [],
   )
+  const allBookings = data?.bookings ?? []
 
   // Filter bookings by selected date range
   const bookings = useMemo(() => {
-    if (!allBookings) return []
     const cutoff = getRangeCutoff(range)
     return allBookings.filter((b) => new Date(b.createdAt) >= cutoff)
   }, [allBookings, range])

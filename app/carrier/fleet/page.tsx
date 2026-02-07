@@ -74,8 +74,8 @@ export default function FleetPage() {
     setDeactivateError(null)
     setCheckingBookings(true)
     try {
-      const bookings = await bookingService.getBookings()
-      const activeBookings = bookings.filter(
+      const response = await bookingService.getBookings()
+      const activeBookings = (response.bookings ?? []).filter(
         (b: Booking) => b.truck.plateNumber === truck.plateNumber && (b.status === "PENDING" || b.status === "CONFIRMED")
       )
       if (activeBookings.length > 0) {

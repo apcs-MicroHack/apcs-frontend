@@ -44,7 +44,10 @@ import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useApi } from "@/hooks/use-api"
 import { bookingService, authService } from "@/services"
+import type { PaginatedBookingsResponse } from "@/services/booking.service"
 import type { Booking, CargoType } from "@/services/types"
+
+const EMPTY_RESPONSE: PaginatedBookingsResponse = { bookings: [], pagination: { page: 1, limit: 10, totalCount: 0, totalPages: 0 } }
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -81,10 +84,11 @@ export default function OperatorQueuePage() {
     })
   }, [])
 
-  const { data: bookings, loading, error, refetch } = useApi<Booking[]>(
-    () => terminalId ? bookingService.getBookings({ terminalId, status: "PENDING" }) : Promise.resolve([]),
+  const { data, loading, error, refetch } = useApi<PaginatedBookingsResponse>(
+    () => terminalId ? bookingService.getBookings({ terminalId, status: "PENDING" }) : Promise.resolve(EMPTY_RESPONSE),
     [terminalId],
   )
+  const bookings = data?.bookings ?? []
 
   const [search, setSearch] = useState("")
   const [typeFilter, setTypeFilter] = useState("all")
@@ -94,7 +98,7 @@ export default function OperatorQueuePage() {
   const [rejectReason, setRejectReason] = useState("")
   const [processing, setProcessing] = useState(false)
 
-  const queue = bookings ?? []
+  const queue = bookings
 
   const filtered = useMemo(() => {
     return queue.filter((b) => {

@@ -12,6 +12,7 @@ import { Sparkline } from "@/components/ui/sparkline"
 import { TrendIndicator } from "@/components/ui/trend-indicator"
 import { useApi } from "@/hooks/use-api"
 import { bookingService, truckService } from "@/services"
+import type { PaginatedBookingsResponse } from "@/services/booking.service"
 import type { Booking, Truck as TruckType } from "@/services/types"
 
 // Mock sparkline data
@@ -22,10 +23,11 @@ function generateSparklineData(baseValue: number, variance: number = 0.3): numbe
 }
 
 export function CarrierKpiCards() {
-  const { data: bookings, loading: bLoading } = useApi<Booking[]>(
+  const { data, loading: bLoading } = useApi<PaginatedBookingsResponse>(
     () => bookingService.getBookings(),
     [],
   )
+  const bookings = data?.bookings ?? []
   const { data: trucks, loading: tLoading } = useApi<TruckType[]>(
     () => truckService.getTrucks(),
     [],

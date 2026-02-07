@@ -24,7 +24,10 @@ import {
 import { Skeleton } from "@/components/ui/skeleton"
 import { useApi } from "@/hooks/use-api"
 import { bookingService, authService } from "@/services"
+import type { PaginatedBookingsResponse } from "@/services/booking.service"
 import type { Booking } from "@/services/types"
+
+const EMPTY_RESPONSE: PaginatedBookingsResponse = { bookings: [], pagination: { page: 1, limit: 10, totalCount: 0, totalPages: 0 } }
 
 const chartConfig = {
   confirmed: {
@@ -55,10 +58,11 @@ export function HourlyActivityChart() {
     })
   }, [])
 
-  const { data: bookings, loading } = useApi<Booking[]>(
-    () => terminalId ? bookingService.getBookings({ terminalId }) : Promise.resolve([]),
+  const { data, loading } = useApi<PaginatedBookingsResponse>(
+    () => terminalId ? bookingService.getBookings({ terminalId }) : Promise.resolve(EMPTY_RESPONSE),
     [terminalId],
   )
+  const bookings = data?.bookings ?? []
 
   const hourlyData = useMemo(() => {
     const buckets = HOURS.map((h) => ({ hour: h, confirmed: 0, pending: 0, rejected: 0 }))

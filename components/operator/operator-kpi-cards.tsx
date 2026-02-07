@@ -13,7 +13,10 @@ import { Sparkline } from "@/components/ui/sparkline"
 import { TrendIndicator } from "@/components/ui/trend-indicator"
 import { useApi } from "@/hooks/use-api"
 import { bookingService, authService } from "@/services"
+import type { PaginatedBookingsResponse } from "@/services/booking.service"
 import type { Booking } from "@/services/types"
+
+const EMPTY_RESPONSE: PaginatedBookingsResponse = { bookings: [], pagination: { page: 1, limit: 10, totalCount: 0, totalPages: 0 } }
 
 // Mock sparkline data
 function generateSparklineData(baseValue: number, variance: number = 0.3): number[] {
@@ -33,17 +36,18 @@ export function OperatorKpiCards() {
     })
   }, [])
 
-  const { data: bookings, loading } = useApi<Booking[]>(
-    () => terminalId ? bookingService.getBookings({ terminalId }) : Promise.resolve([]),
+  const { data, loading } = useApi<PaginatedBookingsResponse>(
+    () => terminalId ? bookingService.getBookings({ terminalId }) : Promise.resolve(EMPTY_RESPONSE),
     [terminalId],
   )
+  const bookings = data?.bookings ?? []
 
-  const pending = bookings?.filter((b) => b.status === "PENDING").length ?? 0
+  const pending = bookings.filter((b) => b.status === "PENDING").length
   const todayStr = new Date().toISOString().slice(0, 10)
-  const todaysBookings = bookings?.filter((b) => b.timeSlot.date.startsWith(todayStr)).length ?? 0
-  const rejected = bookings?.filter(
+  const todaysBookings = bookings.filter((b) => b.timeSlot.date.startsWith(todayStr)).length
+  const rejected = bookings.filter(
     (b) => b.status === "REJECTED" && b.updatedAt.startsWith(todayStr),
-  ).length ?? 0
+  ).length
 
   const kpis = [
     {

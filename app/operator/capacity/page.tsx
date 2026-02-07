@@ -219,7 +219,7 @@ export default function OperatorCapacityPage() {
     setLoadingSlots(true)
     setError(null)
     try {
-      const [slotsRes, bookingsData] = await Promise.all([
+      const [slotsRes, bookingsResponse] = await Promise.all([
         slotService.getAvailableSlots(selectedTerminalId, dateKey, dateKey),
         bookingService.getBookings({ terminalId: selectedTerminalId, startDate: dateKey, endDate: dateKey }),
       ])
@@ -227,7 +227,7 @@ export default function OperatorCapacityPage() {
       const day = availRes.availability?.[0] ?? null
       setDayData(day)
       setSlots(day?.slots ?? [])
-      setBookings(bookingsData)
+      setBookings(bookingsResponse.bookings ?? [])
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to load capacity data")
     } finally {

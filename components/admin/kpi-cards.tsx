@@ -7,6 +7,7 @@ import { Sparkline } from "@/components/ui/sparkline"
 import { TrendIndicator } from "@/components/ui/trend-indicator"
 import { useApi } from "@/hooks/use-api"
 import { bookingService, userService } from "@/services"
+import type { PaginatedBookingsResponse } from "@/services/booking.service"
 import type { Booking, User } from "@/services/types"
 
 // Mock sparkline data (in real app, should come from API)
@@ -17,10 +18,11 @@ function generateSparklineData(baseValue: number, variance: number = 0.2): numbe
 }
 
 export function KpiCards() {
-  const { data: bookings, loading: bLoading } = useApi<Booking[]>(
+  const { data, loading: bLoading } = useApi<PaginatedBookingsResponse>(
     () => bookingService.getBookings(),
     [],
   )
+  const bookings = data?.bookings ?? []
   const { data: users, loading: uLoading } = useApi<User[]>(
     () => userService.getUsers(),
     [],
@@ -28,7 +30,7 @@ export function KpiCards() {
 
   const loading = bLoading || uLoading
 
-  const totalBookings = bookings?.length ?? 0
+  const totalBookings = bookings.length
   const activeCarriers = users?.filter((u) => u.role === "CARRIER" && u.isActive).length ?? 0
 
   const confirmedOrConsumed = bookings?.filter(

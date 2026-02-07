@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/popover"
 import { useApi } from "@/hooks/use-api"
 import { bookingService } from "@/services"
+import type { PaginatedBookingsResponse } from "@/services/booking.service"
 import type { Booking } from "@/services/types"
 import {
   ResponsiveContainer,
@@ -80,14 +81,15 @@ export default function CarrierReportsPage() {
   })
   const [endDate, setEndDate] = useState(() => formatDateStr(new Date()))
 
-  const { data: bookings, loading, error, refetch } = useApi<Booking[]>(
+  const { data, loading, error, refetch } = useApi<PaginatedBookingsResponse>(
     () => bookingService.getBookings({ startDate, endDate }),
     [startDate, endDate],
   )
+  const bookings = data?.bookings ?? []
 
   // Monthly trend (group by week)
   const weeklyData = useMemo(() => {
-    if (!bookings?.length) return []
+    if (!bookings.length) return []
     const weeks: Record<string, { week: string; total: number; completed: number; rejected: number }> = {}
     bookings.forEach((b) => {
       const d = new Date(b.createdAt ?? b.timeSlot?.date ?? Date.now())

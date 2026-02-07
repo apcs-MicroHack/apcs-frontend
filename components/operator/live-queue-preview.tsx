@@ -21,7 +21,10 @@ import {
 import { Skeleton } from "@/components/ui/skeleton"
 import { useApi } from "@/hooks/use-api"
 import { bookingService, authService } from "@/services"
+import type { PaginatedBookingsResponse } from "@/services/booking.service"
 import type { Booking } from "@/services/types"
+
+const EMPTY_RESPONSE: PaginatedBookingsResponse = { bookings: [], pagination: { page: 1, limit: 10, totalCount: 0, totalPages: 0 } }
 import Link from "next/link"
 
 export function LiveQueuePreview() {
@@ -34,10 +37,11 @@ export function LiveQueuePreview() {
     })
   }, [])
 
-  const { data: bookings, loading, refetch } = useApi<Booking[]>(
-    () => terminalId ? bookingService.getBookings({ terminalId, status: "PENDING" }) : Promise.resolve([]),
+  const { data, loading, refetch } = useApi<PaginatedBookingsResponse>(
+    () => terminalId ? bookingService.getBookings({ terminalId, status: "PENDING" }) : Promise.resolve(EMPTY_RESPONSE),
     [terminalId],
   )
+  const bookings = data?.bookings ?? []
   const [processing, setProcessing] = useState<string | null>(null)
 
   const handleConfirm = async (id: string) => {

@@ -16,7 +16,10 @@ import {
 } from "lucide-react"
 import { useApi } from "@/hooks/use-api"
 import { bookingService, notificationService, authService } from "@/services"
+import type { PaginatedBookingsResponse } from "@/services/booking.service"
 import type { Booking } from "@/services/types"
+
+const EMPTY_RESPONSE: PaginatedBookingsResponse = { bookings: [], pagination: { page: 1, limit: 10, totalCount: 0, totalPages: 0 } }
 import Link from "next/link"
 
 export function OperatorQuickActions() {
@@ -29,10 +32,11 @@ export function OperatorQuickActions() {
     })
   }, [])
 
-  const { data: pending } = useApi<Booking[]>(
-    () => terminalId ? bookingService.getBookings({ terminalId, status: "PENDING" }) : Promise.resolve([]),
+  const { data: pendingData } = useApi<PaginatedBookingsResponse>(
+    () => terminalId ? bookingService.getBookings({ terminalId, status: "PENDING" }) : Promise.resolve(EMPTY_RESPONSE),
     [terminalId],
   )
+  const pending = pendingData?.bookings ?? []
   const { data: unread } = useApi<number>(
     () => notificationService.getUnreadCount(),
     [],
