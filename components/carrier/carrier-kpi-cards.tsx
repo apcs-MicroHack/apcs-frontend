@@ -12,8 +12,8 @@ import { Sparkline } from "@/components/ui/sparkline"
 import { TrendIndicator } from "@/components/ui/trend-indicator"
 import { useApi } from "@/hooks/use-api"
 import { bookingService, truckService } from "@/services"
-import type { PaginatedBookingsResponse } from "@/services/booking.service"
-import type { Booking, Truck as TruckType } from "@/services/types"
+import type { BookingSummaryResponse } from "@/services/booking.service"
+import type { Truck as TruckType } from "@/services/types"
 
 // Mock sparkline data
 function generateSparklineData(baseValue: number, variance: number = 0.3): number[] {
@@ -23,11 +23,11 @@ function generateSparklineData(baseValue: number, variance: number = 0.3): numbe
 }
 
 export function CarrierKpiCards() {
-  const { data, loading: bLoading } = useApi<PaginatedBookingsResponse>(
-    () => bookingService.getBookings(),
+  // Use booking summary for accurate counts (not paginated)
+  const { data: summaryData, loading: bLoading } = useApi<BookingSummaryResponse>(
+    () => bookingService.getBookingSummary(),
     [],
   )
-  const bookings = data?.bookings ?? []
   const { data: trucks, loading: tLoading } = useApi<TruckType[]>(
     () => truckService.getTrucks(),
     [],
@@ -35,13 +35,12 @@ export function CarrierKpiCards() {
 
   const loading = bLoading || tLoading
 
-  const active = bookings?.filter(
-    (b) => b.status === "CONFIRMED" || b.status === "PENDING",
-  ).length ?? 0
-  const pending = bookings?.filter((b) => b.status === "PENDING").length ?? 0
-  const completed = bookings?.filter(
-    (b) => b.status === "CONSUMED",
-  ).length ?? 0
+  // Calculate counts from summary
+  const summary = summaryData?.summary ?? []
+  const pending = summary.filter((s) => s.status === "PENDING").reduce((sum, s) => sum + s.count, 0)
+  const confirmed = summary.filter((s) => s.status === "CONFIRMED").reduce((sum, s) => sum + s.count, 0)
+  const completed = summary.filter((s) => s.status === "CONSUMED").reduce((sum, s) => sum + s.count, 0)
+  const active = pending + confirmed
   const fleetCount = trucks?.filter((t) => t.isActive).length ?? 0
 
   const kpis = [

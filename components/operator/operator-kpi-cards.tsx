@@ -13,10 +13,10 @@ import { Sparkline } from "@/components/ui/sparkline"
 import { TrendIndicator } from "@/components/ui/trend-indicator"
 import { useApi } from "@/hooks/use-api"
 import { bookingService, authService } from "@/services"
-import type { PaginatedBookingsResponse } from "@/services/booking.service"
-import type { Booking } from "@/services/types"
+import type { BookingSummaryResponse, PaginatedBookingsResponse } from "@/services/booking.service"
 
-const EMPTY_RESPONSE: PaginatedBookingsResponse = { bookings: [], pagination: { page: 1, limit: 10, totalCount: 0, totalPages: 0 } }
+const EMPTY_SUMMARY: BookingSummaryResponse = { summary: [] }
+const EMPTY_RESPONSE: PaginatedBookingsResponse = { bookings: [], pagination: { page: 1, limit: 10, totalCount: 0, totalPages: 0, hasNextPage: false, hasPrevPage: false } }
 
 // Mock sparkline data
 function generateSparklineData(baseValue: number, variance: number = 0.3): number[] {
@@ -36,18 +36,29 @@ export function OperatorKpiCards() {
     })
   }, [])
 
-  const { data, loading } = useApi<PaginatedBookingsResponse>(
-    () => terminalId ? bookingService.getBookings({ terminalId }) : Promise.resolve(EMPTY_RESPONSE),
-    [terminalId],
+  // Use booking summary for accurate total counts (not paginated)
+  const { data: summaryData, loading: summaryLoading } = useApi<BookingSummaryResponse>(
+    () => bookingService.getBookingSummary(),
+    [],
   )
-  const bookings = data?.bookings ?? []
 
-  const pending = bookings.filter((b) => b.status === "PENDING").length
+  // Get today's bookings separately with date filter
   const todayStr = new Date().toISOString().slice(0, 10)
-  const todaysBookings = bookings.filter((b) => b.timeSlot.date.startsWith(todayStr)).length
-  const rejected = bookings.filter(
-    (b) => b.status === "REJECTED" && b.updatedAt.startsWith(todayStr),
-  ).length
+  const { data: todayData, loading: todayLoading } = useApi<PaginatedBookingsResponse>(
+    () => terminalId 
+      ? bookingService.getBookings({ terminalId, startDate: todayStr, endDate: todayStr, limit: 1 }) 
+      : Promise.resolve(EMPTY_RESPONSE),
+    [terminalId, todayStr],
+  )
+
+  const loading = summaryLoading || todayLoading
+
+  // Calculate counts from summary
+  const summary = summaryData?.summary ?? []
+  const pending = summary.filter((s) => s.status === "PENDING").reduce((sum, s) => sum + s.count, 0)
+  const rejected = summary.filter((s) => s.status === "REJECTED").reduce((sum, s) => sum + s.count, 0)
+  const totalBookings = summary.reduce((sum, s) => sum + s.count, 0)
+  const todaysBookings = todayData?.pagination?.totalCount ?? 0
 
   const kpis = [
     {
@@ -72,12 +83,12 @@ export function OperatorKpiCards() {
     },
     {
       label: "Total Bookings",
-      value: (bookings?.length ?? 0).toLocaleString(),
+      value: totalBookings.toLocaleString(),
       icon: Container,
       iconBg: "bg-[hsl(185,60%,42%)]/10",
       iconColor: "text-[hsl(185,60%,42%)]",
       sparklineColor: "hsl(185,60%,42%)",
-      sparklineData: generateSparklineData(bookings?.length ?? 0),
+      sparklineData: generateSparklineData(totalBookings),
       trend: null, // No historical data available
     },
     {

@@ -106,8 +106,9 @@ function getRangeCutoff(range: RangeKey): Date {
 export default function AdminReportsPage() {
   const [range, setRange] = useState<RangeKey>("30d")
 
+  // Fetch more bookings for accurate chart data
   const { data, loading, error, refetch } = useApi<PaginatedBookingsResponse>(
-    () => bookingService.getBookings(),
+    () => bookingService.getBookings({ limit: 1000 }),
     [],
   )
   const allBookings = data?.bookings ?? []

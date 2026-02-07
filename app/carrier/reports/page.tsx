@@ -81,8 +81,9 @@ export default function CarrierReportsPage() {
   })
   const [endDate, setEndDate] = useState(() => formatDateStr(new Date()))
 
+  // Fetch more bookings for accurate chart data
   const { data, loading, error, refetch } = useApi<PaginatedBookingsResponse>(
-    () => bookingService.getBookings({ startDate, endDate }),
+    () => bookingService.getBookings({ startDate, endDate, limit: 500 }),
     [startDate, endDate],
   )
   const bookings = data?.bookings ?? []

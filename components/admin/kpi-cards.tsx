@@ -7,8 +7,8 @@ import { Sparkline } from "@/components/ui/sparkline"
 import { TrendIndicator } from "@/components/ui/trend-indicator"
 import { useApi } from "@/hooks/use-api"
 import { bookingService, userService } from "@/services"
-import type { PaginatedBookingsResponse } from "@/services/booking.service"
-import type { Booking, User } from "@/services/types"
+import type { BookingSummaryResponse } from "@/services/booking.service"
+import type { User } from "@/services/types"
 
 // Mock sparkline data (in real app, should come from API)
 function generateSparklineData(baseValue: number, variance: number = 0.2): number[] {
@@ -18,11 +18,11 @@ function generateSparklineData(baseValue: number, variance: number = 0.2): numbe
 }
 
 export function KpiCards() {
-  const { data, loading: bLoading } = useApi<PaginatedBookingsResponse>(
-    () => bookingService.getBookings(),
+  // Use booking summary for accurate counts (not paginated)
+  const { data: summaryData, loading: bLoading } = useApi<BookingSummaryResponse>(
+    () => bookingService.getBookingSummary(),
     [],
   )
-  const bookings = data?.bookings ?? []
   const { data: users, loading: uLoading } = useApi<User[]>(
     () => userService.getUsers(),
     [],
@@ -30,12 +30,15 @@ export function KpiCards() {
 
   const loading = bLoading || uLoading
 
-  const totalBookings = bookings.length
+  // Calculate totals from summary
+  const summary = summaryData?.summary ?? []
+  const totalBookings = summary.reduce((sum, item) => sum + item.count, 0)
+  const confirmedOrConsumed = summary
+    .filter((item) => item.status === "CONFIRMED" || item.status === "CONSUMED")
+    .reduce((sum, item) => sum + item.count, 0)
+  
   const activeCarriers = users?.filter((u) => u.role === "CARRIER" && u.isActive).length ?? 0
 
-  const confirmedOrConsumed = bookings?.filter(
-    (b) => b.status === "CONFIRMED" || b.status === "CONSUMED",
-  ).length ?? 0
   const capacityRate = totalBookings > 0
     ? Math.round((confirmedOrConsumed / totalBookings) * 1000) / 10
     : 0
