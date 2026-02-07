@@ -1,6 +1,8 @@
 "use client"
 
 import { useState, useRef, useEffect, useCallback } from "react"
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import {
@@ -133,13 +135,11 @@ function AIMessageContent({ content, uiPayload }: { content: string; uiPayload?:
             </div>
           )
         }
-        // Default: message block with HTML support
+        // Default: message block with markdown rendering (GFM tables enabled)
         return (
-          <div
-            key={idx}
-            className="prose-sm prose-slate dark:prose-invert max-w-none"
-            dangerouslySetInnerHTML={{ __html: block.text || "" }}
-          />
+          <div key={idx} className="prose-sm prose-slate dark:prose-invert max-w-none">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{block.text || ""}</ReactMarkdown>
+          </div>
         )
       })}
       {/* Booking prefill button from uiPayload */}

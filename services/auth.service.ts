@@ -7,11 +7,12 @@ export async function login(
   email: string,
   password: string,
 ): Promise<LoginResponse | OtpRequiredResponse> {
-  const { data } = await api.post("/auth/login", { email, password })
+  const { data, headers } = await api.post("/auth/login", { email, password })
 
-  // Normal login — store CSRF token & return user
-  if (data.csrfToken) {
-    setCsrfToken(data.csrfToken)
+  // Try to get CSRF token from response body or headers
+  const token = data.csrfToken || data.token || headers["x-csrf-token"]
+  if (token) {
+    setCsrfToken(token)
   }
 
   return data
@@ -24,7 +25,11 @@ export async function verifyOtp(
   otp: string,
 ): Promise<LoginResponse> {
   const { data } = await api.post("/auth/verify-otp", { userId, otp })
-  if (data.csrfToken) setCsrfToken(data.csrfToken)
+  
+  // Try to get CSRF token from response body or headers
+  const token = data.csrfToken || data.token || headers["x-csrf-token"]
+  if (token) setCsrfToken(token)
+  
   return data
 }
 

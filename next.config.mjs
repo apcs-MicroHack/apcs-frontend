@@ -52,7 +52,7 @@ const nextConfig = {
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob: https:",
               "font-src 'self' data:",
-              "connect-src 'self' http://localhost:8000 http://127.0.0.1:8000 ws://localhost:8000 wss://localhost:8000 ws: wss:",
+              "connect-src 'self' http://localhost:8000 http://127.0.0.1:8000 http://10.16.29.94:8000 http://10.16.29.96:8000 ws://localhost:8000 wss://localhost:8000 ws://10.16.29.94:8000 wss://10.16.29.94:8000 ws://10.16.29.96:8000 wss://10.16.29.96:8000 ws: wss:",
               "frame-ancestors 'none'",
               "form-action 'self'",
               "base-uri 'self'",

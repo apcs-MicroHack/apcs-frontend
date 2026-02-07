@@ -64,6 +64,11 @@ const navItems = [
     href: "/admin/notifications",
     icon: Bell,
   },
+  {
+    label: "Audit Log",
+    href: "/admin/audit",
+    icon: BarChart3,
+  },
 ]
 
 interface AdminSidebarProps {
