@@ -81,16 +81,15 @@ export default function CarrierReportsPage() {
   })
   const [endDate, setEndDate] = useState(() => formatDateStr(new Date()))
 
-  // Fetch more bookings for accurate chart data
-  const { data, loading, error, refetch } = useApi<PaginatedBookingsResponse>(
-    () => bookingService.getBookings({ startDate, endDate, limit: 500 }),
+  // Fetch ALL bookings (handles pagination automatically - backend caps at 100/page)
+  const { data: bookings, loading, error, refetch } = useApi<Booking[]>(
+    () => bookingService.getAllBookings({ startDate, endDate }),
     [startDate, endDate],
   )
-  const bookings = data?.bookings ?? []
 
   // Monthly trend (group by week)
   const weeklyData = useMemo(() => {
-    if (!bookings.length) return []
+    if (!bookings?.length) return []
     const weeks: Record<string, { week: string; total: number; completed: number; rejected: number }> = {}
     bookings.forEach((b) => {
       const d = new Date(b.createdAt ?? b.timeSlot?.date ?? Date.now())

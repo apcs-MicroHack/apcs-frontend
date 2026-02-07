@@ -81,6 +81,29 @@ export async function getBookingSummary(): Promise<BookingSummaryResponse> {
   return data
 }
 
+// ── Fetch all bookings (handles pagination automatically) ────
+// Backend caps at 100 per page, so this fetches all pages
+
+export async function getAllBookings(
+  filters?: Omit<BookingFilters, "page" | "limit">,
+): Promise<Booking[]> {
+  const allBookings: Booking[] = []
+  let page = 1
+  const limit = 100 // Backend max
+  let hasMore = true
+
+  while (hasMore) {
+    const result = await getBookings({ ...filters, page, limit })
+    allBookings.push(...result.bookings)
+    hasMore = result.pagination.hasNextPage
+    page++
+    // Safety limit to prevent infinite loops
+    if (page > 100) break
+  }
+
+  return allBookings
+}
+
 // ── Single booking ───────────────────────────────────────────
 
 export async function getBookingById(id: string): Promise<BookingDetail> {

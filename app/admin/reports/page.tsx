@@ -106,15 +106,15 @@ function getRangeCutoff(range: RangeKey): Date {
 export default function AdminReportsPage() {
   const [range, setRange] = useState<RangeKey>("30d")
 
-  // Fetch more bookings for accurate chart data
-  const { data, loading, error, refetch } = useApi<PaginatedBookingsResponse>(
-    () => bookingService.getBookings({ limit: 1000 }),
+  // Fetch ALL bookings (handles pagination automatically - backend caps at 100/page)
+  const { data: allBookings, loading, error, refetch } = useApi<Booking[]>(
+    () => bookingService.getAllBookings(),
     [],
   )
-  const allBookings = data?.bookings ?? []
 
   // Filter bookings by selected date range
   const bookings = useMemo(() => {
+    if (!allBookings) return []
     const cutoff = getRangeCutoff(range)
     return allBookings.filter((b) => new Date(b.createdAt) >= cutoff)
   }, [allBookings, range])

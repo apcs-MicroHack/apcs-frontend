@@ -38,10 +38,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton"
 import { useApi } from "@/hooks/use-api"
 import { bookingService, authService } from "@/services"
-import type { PaginatedBookingsResponse } from "@/services/booking.service"
 import type { Booking } from "@/services/types"
-
-const EMPTY_RESPONSE: PaginatedBookingsResponse = { bookings: [], pagination: { page: 1, limit: 10, totalCount: 0, totalPages: 0, hasNextPage: false, hasPrevPage: false } }
 
 // ── Chart configs ──────────────────────────────────────────────────────────
 
@@ -89,16 +86,16 @@ export default function OperatorReportsPage() {
     })
   }, [])
 
-  // Fetch more bookings for accurate chart data
-  const { data, loading, error, refetch } = useApi<PaginatedBookingsResponse>(
-    () => terminalId ? bookingService.getBookings({ terminalId, limit: 500 }) : Promise.resolve(EMPTY_RESPONSE),
+  // Fetch ALL bookings (handles pagination automatically - backend caps at 100/page)
+  const { data: bookings, loading, error, refetch } = useApi<Booking[]>(
+    () => terminalId ? bookingService.getAllBookings({ terminalId }) : Promise.resolve([]),
     [terminalId],
   )
-  const bookings = data?.bookings ?? []
 
   const [range, setRange] = useState("7d")
 
   const filtered = useMemo(() => {
+    if (!bookings) return []
     const cutoff = getDayCutoff(range)
     return bookings.filter((b) => new Date(b.createdAt) >= cutoff)
   }, [bookings, range])

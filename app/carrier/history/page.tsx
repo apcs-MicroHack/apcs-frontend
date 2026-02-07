@@ -43,7 +43,6 @@ import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useApi } from "@/hooks/use-api"
 import { bookingService } from "@/services"
-import type { PaginatedBookingsResponse } from "@/services/booking.service"
 import type { Booking } from "@/services/types"
 
 const HISTORY_STATUSES = ["CONSUMED", "CANCELLED", "REJECTED", "EXPIRED"] as const
@@ -65,16 +64,16 @@ const STATUS_LABELS: Record<string, string> = {
 const PER_PAGE = 10
 
 export default function HistoryPage() {
-  // Fetch all bookings and filter for history statuses client-side
-  // Backend doesn't support multiple statuses filter
-  const { data, loading, error, refetch } = useApi<PaginatedBookingsResponse>(
-    () => bookingService.getBookings(),
+  // Fetch ALL bookings (handles pagination automatically - backend caps at 100/page)
+  // Then filter for history statuses client-side
+  const { data: allBookings, loading, error, refetch } = useApi<Booking[]>(
+    () => bookingService.getAllBookings(),
     [],
   )
-  const allBookings = data?.bookings ?? []
   
   // Filter to only history statuses
   const historyBookings = useMemo(() => {
+    if (!allBookings) return []
     return allBookings.filter(b => 
       HISTORY_STATUSES.includes(b.status as typeof HISTORY_STATUSES[number])
     )
