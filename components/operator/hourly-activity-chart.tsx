@@ -24,7 +24,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton"
 import { useApi } from "@/hooks/use-api"
 import { bookingService, authService } from "@/services"
-import type { Booking } from "@/services/types"
+import type { PaginatedBookingsResponse } from "@/services/booking.service"
 
 const chartConfig = {
   confirmed: {
@@ -55,18 +55,22 @@ export function HourlyActivityChart() {
     })
   }, [])
 
-  // Fetch ALL bookings for accurate chart (handles pagination automatically)
-  const { data: bookings, loading } = useApi<Booking[]>(
-    () => terminalId ? bookingService.getAllBookings({ terminalId }) : Promise.resolve([]),
-    [terminalId],
+  // Today's date for filtering
+  const today = useMemo(() => new Date().toISOString().split("T")[0], [])
+
+  // Fetch today's bookings for terminal (backend caps at 100/page)
+  const { data, loading } = useApi<PaginatedBookingsResponse>(
+    () => terminalId
+      ? bookingService.getBookings({ terminalId, startDate: today, endDate: today, limit: 100 })
+      : Promise.resolve({ bookings: [], pagination: { page: 1, limit: 100, totalCount: 0, totalPages: 0 } }),
+    [terminalId, today],
   )
+  const bookings = data?.bookings ?? []
 
   const hourlyData = useMemo(() => {
     const buckets = HOURS.map((h) => ({ hour: h, confirmed: 0, pending: 0, rejected: 0 }))
-    if (!bookings) return buckets
-    const todayStr = new Date().toISOString().slice(0, 10)
+    if (!bookings.length) return buckets
     for (const b of bookings) {
-      if (!b.timeSlot.date.startsWith(todayStr)) continue
       const h = b.timeSlot.startTime.slice(0, 2)
       const bucket = buckets.find((bk) => bk.hour === h)
       if (!bucket) continue

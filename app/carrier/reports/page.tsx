@@ -29,6 +29,7 @@ import {
 import { useApi } from "@/hooks/use-api"
 import { bookingService } from "@/services"
 import type { PaginatedBookingsResponse } from "@/services/booking.service"
+import type { PaginatedBookingsResponse } from "@/services/booking.service"
 import type { Booking } from "@/services/types"
 import {
   ResponsiveContainer,
@@ -81,15 +82,17 @@ export default function CarrierReportsPage() {
   })
   const [endDate, setEndDate] = useState(() => formatDateStr(new Date()))
 
-  // Fetch ALL bookings (handles pagination automatically - backend caps at 100/page)
-  const { data: bookings, loading, error, refetch } = useApi<Booking[]>(
-    () => bookingService.getAllBookings({ startDate, endDate }),
+  // Fetch bookings with date filter (backend caps at 100 per request)
+  const { data, loading, error, refetch } = useApi<PaginatedBookingsResponse>(
+    () => bookingService.getBookings({ startDate, endDate, limit: 100 }),
     [startDate, endDate],
   )
+  const bookings = data?.bookings ?? []
+  const totalInRange = data?.pagination?.totalCount ?? bookings.length
 
   // Monthly trend (group by week)
   const weeklyData = useMemo(() => {
-    if (!bookings?.length) return []
+    if (!bookings.length) return []
     const weeks: Record<string, { week: string; total: number; completed: number; rejected: number }> = {}
     bookings.forEach((b) => {
       const d = new Date(b.createdAt ?? b.timeSlot?.date ?? Date.now())
@@ -146,11 +149,11 @@ export default function CarrierReportsPage() {
 
   // Summary stats
   const summary = useMemo(() => {
-    const total = bookings?.length ?? 0
-    const completed = (bookings ?? []).filter((b) => b.status === "CONSUMED").length
+    const total = totalInRange
+    const completed = bookings.filter((b) => b.status === "CONSUMED").length
     const rate = total > 0 ? Math.round((completed / total) * 100) : 0
     return { total, completed, rate }
-  }, [bookings])
+  }, [bookings, totalInRange])
 
   if (loading) {
     return (

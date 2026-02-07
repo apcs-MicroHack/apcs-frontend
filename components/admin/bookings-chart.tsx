@@ -24,7 +24,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton"
 import { useApi } from "@/hooks/use-api"
 import { bookingService } from "@/services"
-import type { Booking } from "@/services/types"
+import type { PaginatedBookingsResponse } from "@/services/booking.service"
 
 const chartConfig = {
   confirmed: {
@@ -43,16 +43,28 @@ const chartConfig = {
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 
+// Get last 30 days for chart data
+function getChartDateRange(): { startDate: string; endDate: string } {
+  const now = new Date()
+  const end = now.toISOString().split("T")[0]
+  const start = new Date(now)
+  start.setDate(start.getDate() - 30)
+  return { startDate: start.toISOString().split("T")[0], endDate: end }
+}
+
 export function BookingsChart() {
-  // Fetch ALL bookings (handles pagination automatically - backend caps at 100/page)
-  const { data: bookings, loading } = useApi<Booking[]>(
-    () => bookingService.getAllBookings(),
-    [],
+  const dateRange = useMemo(() => getChartDateRange(), [])
+
+  // Fetch bookings for last 30 days (backend caps at 100/page)
+  const { data, loading } = useApi<PaginatedBookingsResponse>(
+    () => bookingService.getBookings({ startDate: dateRange.startDate, endDate: dateRange.endDate, limit: 100 }),
+    [dateRange.startDate, dateRange.endDate],
   )
+  const bookings = data?.bookings ?? []
 
   /* Aggregate bookings by day-of-week */
   const weeklyData = useMemo(() => {
-    if (!bookings?.length) return []
+    if (!bookings.length) return []
     const buckets = DAY_LABELS.map((day) => ({ day, confirmed: 0, pending: 0, rejected: 0 }))
     for (const b of bookings) {
       const dow = new Date(b.createdAt).getDay()

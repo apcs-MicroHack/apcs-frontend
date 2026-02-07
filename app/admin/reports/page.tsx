@@ -82,42 +82,48 @@ const hourlyChartConfig = {
 
 type RangeKey = "today" | "7d" | "30d" | "90d" | "1y"
 
-function getRangeCutoff(range: RangeKey): Date {
+function getDateRange(range: RangeKey): { startDate: string; endDate: string } {
   const now = new Date()
+  const endDate = now.toISOString().slice(0, 10)
+  let start: Date
   switch (range) {
-    case "today": {
-      const d = new Date(now)
-      d.setHours(0, 0, 0, 0)
-      return d
-    }
+    case "today":
+      start = new Date(now)
+      start.setHours(0, 0, 0, 0)
+      break
     case "7d":
-      return new Date(now.getTime() - 7 * 86_400_000)
+      start = new Date(now.getTime() - 7 * 86_400_000)
+      break
     case "30d":
-      return new Date(now.getTime() - 30 * 86_400_000)
+      start = new Date(now.getTime() - 30 * 86_400_000)
+      break
     case "90d":
-      return new Date(now.getTime() - 90 * 86_400_000)
+      start = new Date(now.getTime() - 90 * 86_400_000)
+      break
     case "1y":
-      return new Date(now.getTime() - 365 * 86_400_000)
+      start = new Date(now.getTime() - 365 * 86_400_000)
+      break
   }
+  return { startDate: start.toISOString().slice(0, 10), endDate }
 }
 
 // ── Page ─────────────────────────────────────────────────────
 
 export default function AdminReportsPage() {
   const [range, setRange] = useState<RangeKey>("30d")
+  const dateRange = useMemo(() => getDateRange(range), [range])
 
-  // Fetch ALL bookings (handles pagination automatically - backend caps at 100/page)
-  const { data: allBookings, loading, error, refetch } = useApi<Booking[]>(
-    () => bookingService.getAllBookings(),
-    [],
+  // Fetch bookings with date filter (backend caps at 100 per request)
+  const { data, loading, error, refetch } = useApi<PaginatedBookingsResponse>(
+    () => bookingService.getBookings({ 
+      startDate: dateRange.startDate, 
+      endDate: dateRange.endDate,
+      limit: 100 
+    }),
+    [dateRange.startDate, dateRange.endDate],
   )
-
-  // Filter bookings by selected date range
-  const bookings = useMemo(() => {
-    if (!allBookings) return []
-    const cutoff = getRangeCutoff(range)
-    return allBookings.filter((b) => new Date(b.createdAt) >= cutoff)
-  }, [allBookings, range])
+  const bookings = data?.bookings ?? []
+  const totalInRange = data?.pagination?.totalCount ?? bookings.length
 
   // Monthly trend: group by YYYY-MM
   const monthlyData = useMemo(() => {

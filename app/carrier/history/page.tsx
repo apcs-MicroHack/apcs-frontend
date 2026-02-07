@@ -43,6 +43,7 @@ import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useApi } from "@/hooks/use-api"
 import { bookingService } from "@/services"
+import type { PaginatedBookingsResponse } from "@/services/booking.service"
 import type { Booking } from "@/services/types"
 
 const HISTORY_STATUSES = ["CONSUMED", "CANCELLED", "REJECTED", "EXPIRED"] as const
@@ -63,21 +64,31 @@ const STATUS_LABELS: Record<string, string> = {
 
 const PER_PAGE = 10
 
+// Get last 90 days date range for history
+function getHistoryDateRange(): { startDate: string; endDate: string } {
+  const now = new Date()
+  const end = now.toISOString().split("T")[0]
+  const start = new Date(now)
+  start.setDate(start.getDate() - 90)
+  return { startDate: start.toISOString().split("T")[0], endDate: end }
+}
+
 export default function HistoryPage() {
-  // Fetch ALL bookings (handles pagination automatically - backend caps at 100/page)
-  // Then filter for history statuses client-side
-  const { data: allBookings, loading, error, refetch } = useApi<Booking[]>(
-    () => bookingService.getAllBookings(),
-    [],
+  const dateRange = useMemo(() => getHistoryDateRange(), [])
+
+  // Fetch bookings from last 90 days (backend caps at 100/page)
+  const { data, loading, error, refetch } = useApi<PaginatedBookingsResponse>(
+    () => bookingService.getBookings({ startDate: dateRange.startDate, endDate: dateRange.endDate, limit: 100 }),
+    [dateRange.startDate, dateRange.endDate],
   )
   
   // Filter to only history statuses
   const historyBookings = useMemo(() => {
-    if (!allBookings) return []
-    return allBookings.filter(b => 
+    const bookings = data?.bookings ?? []
+    return bookings.filter(b => 
       HISTORY_STATUSES.includes(b.status as typeof HISTORY_STATUSES[number])
     )
-  }, [allBookings])
+  }, [data])
 
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")

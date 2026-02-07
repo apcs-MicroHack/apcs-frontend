@@ -38,7 +38,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton"
 import { useApi } from "@/hooks/use-api"
 import { bookingService, authService } from "@/services"
-import type { Booking } from "@/services/types"
+import type { PaginatedBookingsResponse } from "@/services/booking.service"
 
 // ── Chart configs ──────────────────────────────────────────────────────────
 
@@ -62,22 +62,25 @@ const STATUS_COLORS: Record<string, string> = {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function getDayCutoff(range: string): Date {
+function getDateRange(range: string): { startDate: string; endDate: string } {
   const now = new Date()
-  const d = new Date(now)
+  const end = now.toISOString().split("T")[0]
+  const start = new Date(now)
   switch (range) {
-    case "1d": d.setDate(d.getDate() - 1); break
-    case "7d": d.setDate(d.getDate() - 7); break
-    case "30d": d.setDate(d.getDate() - 30); break
-    case "90d": d.setDate(d.getDate() - 90); break
+    case "1d": start.setDate(start.getDate() - 1); break
+    case "7d": start.setDate(start.getDate() - 7); break
+    case "30d": start.setDate(start.getDate() - 30); break
+    case "90d": start.setDate(start.getDate() - 90); break
   }
-  return d
+  return { startDate: start.toISOString().split("T")[0], endDate: end }
 }
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function OperatorReportsPage() {
   const [terminalId, setTerminalId] = useState<string | null>(null)
+  const [range, setRange] = useState("7d")
+  const dateRange = useMemo(() => getDateRange(range), [range])
 
   // Get operator's assigned terminal
   useEffect(() => {
@@ -86,32 +89,28 @@ export default function OperatorReportsPage() {
     })
   }, [])
 
-  // Fetch ALL bookings (handles pagination automatically - backend caps at 100/page)
-  const { data: bookings, loading, error, refetch } = useApi<Booking[]>(
-    () => terminalId ? bookingService.getAllBookings({ terminalId }) : Promise.resolve([]),
-    [terminalId],
+  // Fetch bookings with date filter (backend caps at 100/page)
+  const { data, loading, error, refetch } = useApi<PaginatedBookingsResponse>(
+    () => terminalId
+      ? bookingService.getBookings({ terminalId, startDate: dateRange.startDate, endDate: dateRange.endDate, limit: 100 })
+      : Promise.resolve({ bookings: [], pagination: { page: 1, limit: 100, totalCount: 0, totalPages: 0 } }),
+    [terminalId, dateRange.startDate, dateRange.endDate],
   )
-
-  const [range, setRange] = useState("7d")
-
-  const filtered = useMemo(() => {
-    if (!bookings) return []
-    const cutoff = getDayCutoff(range)
-    return bookings.filter((b) => new Date(b.createdAt) >= cutoff)
-  }, [bookings, range])
+  const bookings = data?.bookings ?? []
+  const totalInRange = data?.pagination?.totalCount ?? bookings.length
 
   // Weekly processing trend
   const weeklyData = useMemo(() => {
     const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
     const map: Record<string, { confirmed: number; rejected: number }> = {}
     days.forEach((d) => (map[d] = { confirmed: 0, rejected: 0 }))
-    filtered.forEach((b) => {
+    bookings.forEach((b) => {
       const day = days[new Date(b.createdAt).getDay()]
       if (b.status === "CONFIRMED" || b.status === "CONSUMED") map[day].confirmed++
       if (b.status === "REJECTED") map[day].rejected++
     })
     return days.slice(1).concat(days[0]).map((d) => ({ day: d, ...map[d] }))
-  }, [filtered])
+  }, [bookings])
 
   // Hourly distribution
   const hourlyDistribution = useMemo(() => {
@@ -119,43 +118,43 @@ export default function OperatorReportsPage() {
       const h = i + 6
       return { hour: `${String(h).padStart(2, "0")}:00`, trucks: 0 }
     })
-    filtered.forEach((b) => {
+    bookings.forEach((b) => {
       if (!b.timeSlot?.startTime) return
       const h = parseInt(b.timeSlot.startTime.split(":")[0], 10)
       const idx = h - 6
       if (idx >= 0 && idx < hours.length) hours[idx].trucks++
     })
     return hours
-  }, [filtered])
+  }, [bookings])
 
   // Status distribution
   const statusData = useMemo(() => {
     const counts: Record<string, number> = {}
-    filtered.forEach((b) => { counts[b.status] = (counts[b.status] || 0) + 1 })
+    bookings.forEach((b) => { counts[b.status] = (counts[b.status] || 0) + 1 })
     return Object.entries(counts).map(([name, value]) => ({
       name,
       value,
       color: STATUS_COLORS[name] ?? "hsl(215, 15%, 65%)",
     }))
-  }, [filtered])
+  }, [bookings])
 
   // Top carriers
   const topCarriers = useMemo(() => {
     const map: Record<string, number> = {}
-    filtered.forEach((b) => {
+    bookings.forEach((b) => {
       const name = b.carrier.companyName
       map[name] = (map[name] || 0) + 1
     })
     return Object.entries(map)
       .sort(([, a], [, b]) => b - a)
       .slice(0, 5)
-      .map(([name, bookings]) => ({ name, bookings }))
-  }, [filtered])
+      .map(([name, count]) => ({ name, bookings: count }))
+  }, [bookings])
 
   // Summary stats
-  const totalProcessed = filtered.length
-  const approvalRate = totalProcessed > 0
-    ? (filtered.filter((b) => b.status === "CONFIRMED" || b.status === "CONSUMED").length / totalProcessed * 100).toFixed(1)
+  const totalProcessed = totalInRange
+  const approvalRate = bookings.length > 0
+    ? (bookings.filter((b) => b.status === "CONFIRMED" || b.status === "CONSUMED").length / bookings.length * 100).toFixed(1)
     : "0.0"
 
   if (error) {
