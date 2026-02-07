@@ -1,6 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
 import {
   Card,
   CardContent,
@@ -11,201 +13,55 @@ import {
 import { Button } from "@/components/ui/button"
 import {
   Sparkles,
-  TrendingUp,
-  TrendingDown,
-  AlertTriangle,
-  CheckCircle2,
   RefreshCw,
   ArrowRight,
-  Lightbulb,
-  Clock,
   BarChart3,
+  AlertCircle,
+  Clock,
 } from "lucide-react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
+import { api } from "@/services"
 
-interface AISuggestion {
-  id: string
-  type: "insight" | "warning" | "opportunity" | "action"
-  title: string
-  description: string
-  href?: string
-  actionLabel?: string
-  priority: "high" | "medium" | "low"
-  metric?: {
-    label: string
-    value: string
-    trend?: "up" | "down" | "neutral"
-  }
-}
-
-// Simulated AI suggestions — in production, replace with real API call
-const MOCK_SUGGESTIONS: AISuggestion[] = [
-  {
-    id: "1",
-    type: "warning",
-    title: "Terminal A Nearing Capacity",
-    description:
-      "Terminal A is at 87% capacity for tomorrow's morning slots. Consider redistributing bookings to Terminal B which is at 42%.",
-    href: "/admin/terminals",
-    actionLabel: "View Terminals",
-    priority: "high",
-    metric: { label: "Capacity", value: "87%", trend: "up" },
-  },
-  {
-    id: "2",
-    type: "insight",
-    title: "Booking Volume Trending Up",
-    description:
-      "Booking volume increased 23% compared to the same period last week. Peak hours are shifting to 10:00-12:00.",
-    href: "/admin/reports",
-    actionLabel: "View Report",
-    priority: "medium",
-    metric: { label: "Growth", value: "+23%", trend: "up" },
-  },
-  {
-    id: "3",
-    type: "opportunity",
-    title: "Underutilized Evening Slots",
-    description:
-      "Evening slots (16:00-20:00) have only 31% utilization. Consider offering incentives to carriers for off-peak bookings.",
-    href: "/admin/bookings",
-    actionLabel: "View Bookings",
-    priority: "medium",
-    metric: { label: "Utilization", value: "31%", trend: "down" },
-  },
-  {
-    id: "4",
-    type: "action",
-    title: "3 Carriers Pending Approval",
-    description:
-      "New carrier registrations are awaiting review. Average approval time is currently 2.4 days.",
-    href: "/admin/carriers",
-    actionLabel: "Review Carriers",
-    priority: "high",
-    metric: { label: "Pending", value: "3", trend: "neutral" },
-  },
-  {
-    id: "5",
-    type: "insight",
-    title: "Top Carrier Performance",
-    description:
-      "MaritimeX Logistics has the highest on-time arrival rate at 96%. Consider them for priority slot access.",
-    href: "/admin/carriers",
-    actionLabel: "View Carriers",
-    priority: "low",
-    metric: { label: "On-time", value: "96%", trend: "up" },
-  },
-]
-
-const typeConfig = {
-  insight: {
-    icon: Lightbulb,
-    iconBg: "bg-blue-500/10",
-    iconColor: "text-blue-500",
-    borderColor: "border-l-blue-500",
-  },
-  warning: {
-    icon: AlertTriangle,
-    iconBg: "bg-amber-500/10",
-    iconColor: "text-amber-500",
-    borderColor: "border-l-amber-500",
-  },
-  opportunity: {
-    icon: TrendingUp,
-    iconBg: "bg-emerald-500/10",
-    iconColor: "text-emerald-500",
-    borderColor: "border-l-emerald-500",
-  },
-  action: {
-    icon: Clock,
-    iconBg: "bg-purple-500/10",
-    iconColor: "text-purple-500",
-    borderColor: "border-l-purple-500",
-  },
-}
-
-function SuggestionCard({ suggestion }: { suggestion: AISuggestion }) {
-  const config = typeConfig[suggestion.type]
-  const Icon = config.icon
-
-  return (
-    <div
-      className={cn(
-        "group flex gap-3.5 rounded-lg border border-border border-l-[3px] bg-card p-4 transition-all hover:shadow-md hover:bg-muted/30",
-        config.borderColor
-      )}
-    >
-      <div
-        className={cn(
-          "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
-          config.iconBg
-        )}
-      >
-        <Icon className={cn("h-4.5 w-4.5", config.iconColor)} />
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-start justify-between gap-2">
-          <h4 className="text-sm font-semibold text-foreground leading-tight">
-            {suggestion.title}
-          </h4>
-          {suggestion.metric && (
-            <div className="flex items-center gap-1 shrink-0 rounded-md bg-muted/60 px-2 py-0.5">
-              {suggestion.metric.trend === "up" && (
-                <TrendingUp className="h-3 w-3 text-emerald-500" />
-              )}
-              {suggestion.metric.trend === "down" && (
-                <TrendingDown className="h-3 w-3 text-red-500" />
-              )}
-              <span className="text-xs font-medium text-foreground">
-                {suggestion.metric.value}
-              </span>
-            </div>
-          )}
-        </div>
-        <p className="mt-1 text-xs text-muted-foreground leading-relaxed line-clamp-2">
-          {suggestion.description}
-        </p>
-        {suggestion.href && (
-          <Link
-            href={suggestion.href}
-            className="mt-2.5 inline-flex items-center gap-1 text-xs font-medium text-primary hover:text-primary/80 transition-colors"
-          >
-            {suggestion.actionLabel ?? "View"}
-            <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
-          </Link>
-        )}
-      </div>
-    </div>
-  )
+interface SuggestionsResponse {
+  suggestions: string
+  generatedAt: string
+  cached: boolean
 }
 
 export function AISuggestions() {
-  const [suggestions, setSuggestions] = useState<AISuggestion[]>([])
+  const [data, setData] = useState<SuggestionsResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  const loadSuggestions = async () => {
-    // Simulate API call — replace with real endpoint later
-    setLoading(true)
-    await new Promise((r) => setTimeout(r, 800))
-    // Randomly pick 3-4 suggestions to simulate dynamic AI responses
-    const shuffled = [...MOCK_SUGGESTIONS].sort(() => Math.random() - 0.5)
-    setSuggestions(shuffled.slice(0, 3 + Math.floor(Math.random() * 2)))
-    setLoading(false)
-  }
+  const fetchSuggestions = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true)
+    else setLoading(true)
+    setError(null)
 
-  const handleRefresh = async () => {
-    setRefreshing(true)
-    await new Promise((r) => setTimeout(r, 600))
-    const shuffled = [...MOCK_SUGGESTIONS].sort(() => Math.random() - 0.5)
-    setSuggestions(shuffled.slice(0, 3 + Math.floor(Math.random() * 2)))
-    setRefreshing(false)
-  }
+    try {
+      const res = await api.get<SuggestionsResponse>("/suggestions")
+      setData(res.data)
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.error ||
+        err?.message ||
+        "Failed to load AI suggestions"
+      setError(msg)
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
+  }, [])
 
   useEffect(() => {
-    loadSuggestions()
-  }, [])
+    fetchSuggestions()
+  }, [fetchSuggestions])
+
+  const generatedLabel = data?.generatedAt
+    ? `Generated ${new Date(data.generatedAt).toLocaleString()}`
+    : null
 
   return (
     <Card className="border-border bg-card">
@@ -224,49 +80,100 @@ export function AISuggestions() {
               </CardDescription>
             </div>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={handleRefresh}
-            disabled={refreshing || loading}
-            aria-label="Refresh suggestions"
-          >
-            <RefreshCw
-              className={cn("h-4 w-4", refreshing && "animate-spin")}
-            />
-          </Button>
+          <div className="flex items-center gap-2">
+            {data?.cached && (
+              <span className="text-[10px] text-muted-foreground bg-muted/60 rounded-full px-2 py-0.5">
+                cached
+              </span>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => fetchSuggestions(true)}
+              disabled={refreshing || loading}
+              aria-label="Refresh suggestions"
+            >
+              <RefreshCw
+                className={cn("h-4 w-4", refreshing && "animate-spin")}
+              />
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent>
-        {loading ? (
+        {/* Loading state */}
+        {loading && (
           <div className="flex flex-col gap-3">
-            {Array.from({ length: 3 }).map((_, i) => (
+            {Array.from({ length: 4 }).map((_, i) => (
               <div
                 key={i}
-                className="flex gap-3 rounded-lg border border-border p-4 animate-pulse"
+                className="rounded-lg border border-border p-4 animate-pulse"
               >
-                <div className="h-9 w-9 shrink-0 rounded-lg bg-muted" />
-                <div className="flex-1 space-y-2">
+                <div className="space-y-2">
                   <div className="h-4 w-3/4 rounded bg-muted" />
                   <div className="h-3 w-full rounded bg-muted" />
-                  <div className="h-3 w-1/2 rounded bg-muted" />
+                  <div className="h-3 w-2/3 rounded bg-muted" />
                 </div>
               </div>
             ))}
           </div>
-        ) : suggestions.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-8 text-center">
-            <CheckCircle2 className="h-8 w-8 text-emerald-500/50" />
-            <p className="mt-2 text-sm text-muted-foreground">
-              Everything looks good! No suggestions right now.
-            </p>
+        )}
+
+        {/* Error state */}
+        {!loading && error && (
+          <div className="flex flex-col items-center justify-center gap-3 py-8 text-center">
+            <AlertCircle className="h-8 w-8 text-destructive/60" />
+            <div>
+              <p className="text-sm font-medium text-destructive">{error}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                AI suggestions are temporarily unavailable.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-2 gap-1.5 text-xs"
+              onClick={() => fetchSuggestions()}
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              Retry
+            </Button>
           </div>
-        ) : (
-          <div className="flex flex-col gap-3">
-            {suggestions.map((s) => (
-              <SuggestionCard key={s.id} suggestion={s} />
-            ))}
+        )}
+
+        {/* Content */}
+        {!loading && !error && data?.suggestions && (
+          <>
+            <div className="rounded-lg border border-border bg-muted/20 p-5">
+              <div className="prose prose-sm prose-slate dark:prose-invert max-w-none [&_table]:w-full [&_table]:border-collapse [&_table]:text-xs [&_table]:rounded-lg [&_thead]:bg-muted/50 [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:font-semibold [&_td]:px-3 [&_td]:py-2 [&_td]:border-t [&_td]:border-border [&_tr]:hover:bg-muted/30 [&_pre]:overflow-x-auto [&_code]:break-words [&_ul]:space-y-1 [&_ol]:space-y-1 [&_li]:text-sm [&_p]:text-sm [&_p]:leading-relaxed [&_h1]:text-lg [&_h1]:font-bold [&_h2]:text-base [&_h2]:font-semibold [&_h3]:text-sm [&_h3]:font-semibold [&_strong]:text-foreground [&_blockquote]:border-l-primary/50 [&_blockquote]:text-muted-foreground">
+                <div className="overflow-x-auto">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {data.suggestions}
+                  </ReactMarkdown>
+                </div>
+              </div>
+            </div>
+
+            {/* Timestamp */}
+            {generatedLabel && (
+              <div className="mt-3 flex items-center justify-end gap-1.5">
+                <Clock className="h-3 w-3 text-muted-foreground" />
+                <span className="text-[10px] text-muted-foreground">
+                  {generatedLabel}
+                </span>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* No data state */}
+        {!loading && !error && !data?.suggestions && (
+          <div className="flex flex-col items-center justify-center py-8 text-center">
+            <Sparkles className="h-8 w-8 text-muted-foreground/40" />
+            <p className="mt-2 text-sm text-muted-foreground">
+              No suggestions available right now. Try refreshing.
+            </p>
           </div>
         )}
 
