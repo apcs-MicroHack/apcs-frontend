@@ -1,3 +1,4 @@
+// ...existing code moved to md/UI_IMPROVEMENTS.md
 # UI Improvements - Hackathon Winning Design
 
 > Saved: February 7, 2026  

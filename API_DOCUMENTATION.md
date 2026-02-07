@@ -1,3 +1,4 @@
+// ...existing code moved to md/API_DOCUMENTATION.md
 # ShipLink API Documentation
 
 ## 🌐 Base API Configuration

@@ -1,3 +1,4 @@
+// ...existing code moved to md/QUICKSTART.md
 # Global Axios Service - Quick Start Guide
 
 ## ✅ What's Been Created

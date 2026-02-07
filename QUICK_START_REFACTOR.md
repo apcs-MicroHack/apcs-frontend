@@ -1,3 +1,4 @@
+// ...existing code moved to md/QUICK_START_REFACTOR.md
 # Quick Start: Refactor Your First Component
 
 This is a step-by-step guide to refactor `components/admin/recent-bookings.tsx` - the **easiest** component to update, a perfect starting point.

@@ -1,3 +1,4 @@
+// ...existing code moved to md/MOCK_DATA_REMOVAL.md
 # Mock Data Removal & API Integration Guide
 
 This guide shows where all mock data is located and how to replace it with real API calls.

@@ -1,3 +1,4 @@
+// ...existing code moved to md/API_RESPONSE_MAPPING.md
 # API Response Mapping Guide
 
 This guide shows how to handle different API response types and map them to component data structures.

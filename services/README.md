@@ -1,3 +1,4 @@
+// ...existing code moved to md/README.md
 # Services Layer
 
 This directory contains all API service modules for the APCS application. All services use a centralized axios instance with CSRF token handling and HTTP-only cookie support.
