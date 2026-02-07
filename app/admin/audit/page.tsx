@@ -71,26 +71,26 @@ export default function AdminAuditPage() {
   }, [page, search, actionFilter, entityFilter, dateRangeKey])
 
   function renderDetails(details: any) {
-    if (!details) return "-"
+    if (!details) return <span className="text-muted-foreground">-</span>
     if (typeof details === "string") {
       try {
         const parsed = JSON.parse(details)
         if (typeof parsed === "object" && parsed !== null) details = parsed
-        else return details
+        else return <span className="break-words text-xs">{details}</span>
       } catch {
-        return details
+        return <span className="break-words text-xs">{details}</span>
       }
     }
     if (typeof details === "object" && details !== null) {
       return (
-        <ul className="text-xs text-muted-foreground space-y-1">
+        <ul className="text-xs text-muted-foreground space-y-0.5">
           {Object.entries(details).map(([k, v]) => (
-            <li key={k}><span className="font-semibold">{k}:</span> {String(v)}</li>
+            <li key={k} className="break-words"><span className="font-semibold text-foreground/80">{k}:</span> {String(v)}</li>
           ))}
         </ul>
       )
     }
-    return String(details)
+    return <span className="break-words text-xs">{String(details)}</span>
   }
 
   function toggleColumn(col: string) {
@@ -117,7 +117,29 @@ export default function AdminAuditPage() {
     }
   }
 
-  if (loading) return <Skeleton className="h-64 w-full" />
+  if (loading) return (
+    <div className="flex flex-col gap-6 p-6">
+      <div className="flex flex-col gap-2">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-4 w-64" />
+      </div>
+      <Skeleton className="h-12 w-full rounded-lg" />
+      <div className="rounded-lg border border-border bg-card overflow-hidden">
+        <div className="border-b border-border px-6 py-3 flex gap-8">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-4 w-20" />
+          ))}
+        </div>
+        {Array.from({ length: 8 }).map((_, i) => (
+          <div key={i} className="border-b border-border px-6 py-3 flex gap-8">
+            {Array.from({ length: 6 }).map((_, j) => (
+              <Skeleton key={j} className="h-4 w-20" />
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
   if (error) return (
     <div className="flex flex-col items-center justify-center gap-4 py-20">
       <AlertCircle className="h-10 w-10 text-destructive" />
@@ -247,19 +269,18 @@ export default function AdminAuditPage() {
       </Card>
       {/* Table */}
       <Card className="border-border bg-card">
-        <CardContent className="p-0">
-          <Table>
+        <CardContent className="p-0 overflow-x-auto">
+          <Table className="min-w-[900px]">
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                {showColumns.includes("date") && <TableHead className="pl-6 text-xs uppercase tracking-wider">Date</TableHead>}
-                {showColumns.includes("user") && <TableHead className="text-xs uppercase tracking-wider">User</TableHead>}
-                {showColumns.includes("action") && <TableHead className="text-xs uppercase tracking-wider">Action</TableHead>}
-                {showColumns.includes("entity") && <TableHead className="text-xs uppercase tracking-wider">Entity</TableHead>}
-                {showColumns.includes("entityId") && <TableHead className="text-xs uppercase tracking-wider">Entity ID</TableHead>}
-                {showColumns.includes("details") && <TableHead className="text-xs uppercase tracking-wider">Details</TableHead>}
-                {showColumns.includes("ipAddress") && <TableHead className="text-xs uppercase tracking-wider">IP Address</TableHead>}
-                {showColumns.includes("userAgent") && <TableHead className="text-xs uppercase tracking-wider">User Agent</TableHead>}
-                {/* No Actions column, only eye icon in user cell */}
+                {showColumns.includes("date") && <TableHead className="pl-6 text-xs uppercase tracking-wider whitespace-nowrap min-w-[170px]">Date</TableHead>}
+                {showColumns.includes("user") && <TableHead className="text-xs uppercase tracking-wider whitespace-nowrap min-w-[180px]">User</TableHead>}
+                {showColumns.includes("action") && <TableHead className="text-xs uppercase tracking-wider whitespace-nowrap min-w-[120px]">Action</TableHead>}
+                {showColumns.includes("entity") && <TableHead className="text-xs uppercase tracking-wider whitespace-nowrap min-w-[100px]">Entity</TableHead>}
+                {showColumns.includes("entityId") && <TableHead className="text-xs uppercase tracking-wider whitespace-nowrap min-w-[120px]">Entity ID</TableHead>}
+                {showColumns.includes("details") && <TableHead className="text-xs uppercase tracking-wider whitespace-nowrap min-w-[200px]">Details</TableHead>}
+                {showColumns.includes("ipAddress") && <TableHead className="text-xs uppercase tracking-wider whitespace-nowrap min-w-[130px]">IP Address</TableHead>}
+                {showColumns.includes("userAgent") && <TableHead className="text-xs uppercase tracking-wider whitespace-nowrap min-w-[200px]">User Agent</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -271,16 +292,26 @@ export default function AdminAuditPage() {
                 </TableRow>
               ) : (
                 logs.map((log) => (
-                  <TableRow key={log.id}>
-                    {showColumns.includes("date") && <TableCell className="pl-6 font-mono text-xs text-foreground">{new Date(log.createdAt).toLocaleString()}</TableCell>}
-                    {showColumns.includes("user") && <TableCell className="text-sm text-foreground flex items-center gap-2">{log.user?.email || "-"} {log.user?.id && <Button size="icon" variant="ghost" className="ml-1" onClick={() => handleViewUser(log.user.id)} aria-label="View user details"><Eye className="h-4 w-4" /></Button>}</TableCell>}
-                    {showColumns.includes("action") && <TableCell><span className={`px-2 py-1 rounded text-xs font-semibold border ${ACTION_COLORS[log.action] || "bg-gray-100 text-gray-800 border-gray-200"}`}>{log.action}</span></TableCell>}
-                    {showColumns.includes("entity") && <TableCell className="text-xs text-muted-foreground">{log.entity}</TableCell>}
-                    {showColumns.includes("entityId") && <TableCell className="text-xs text-muted-foreground">{log.entityId || "-"}</TableCell>}
-                    {showColumns.includes("details") && <TableCell>{renderDetails(log.details)}</TableCell>}
-                    {showColumns.includes("ipAddress") && <TableCell className="text-xs text-muted-foreground">{log.ipAddress || "-"}</TableCell>}
-                    {showColumns.includes("userAgent") && <TableCell className="text-xs text-muted-foreground max-w-xs truncate" title={log.userAgent}>{log.userAgent || "-"}</TableCell>}
-                    {/* No View User button column */}
+                  <TableRow key={log.id} className="hover:bg-muted/40 transition-colors">
+                    {showColumns.includes("date") && <TableCell className="pl-6 font-mono text-xs text-foreground whitespace-nowrap">{new Date(log.createdAt).toLocaleString()}</TableCell>}
+                    {showColumns.includes("user") && (
+                      <TableCell className="text-sm text-foreground">
+                        <div className="flex items-center gap-2">
+                          <span className="truncate max-w-[150px]" title={log.user?.email}>{log.user?.email || "-"}</span>
+                          {log.user?.id && (
+                            <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => handleViewUser(log.user.id)} aria-label="View user details">
+                              <Eye className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    )}
+                    {showColumns.includes("action") && <TableCell><span className={`inline-block px-2.5 py-1 rounded-md text-xs font-semibold border whitespace-nowrap ${ACTION_COLORS[log.action] || "bg-gray-100 text-gray-800 border-gray-200"}`}>{log.action}</span></TableCell>}
+                    {showColumns.includes("entity") && <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{log.entity}</TableCell>}
+                    {showColumns.includes("entityId") && <TableCell className="text-xs text-muted-foreground font-mono">{log.entityId || "-"}</TableCell>}
+                    {showColumns.includes("details") && <TableCell className="max-w-[300px]">{renderDetails(log.details)}</TableCell>}
+                    {showColumns.includes("ipAddress") && <TableCell className="text-xs text-muted-foreground font-mono whitespace-nowrap">{log.ipAddress || "-"}</TableCell>}
+                    {showColumns.includes("userAgent") && <TableCell className="text-xs text-muted-foreground max-w-[250px] truncate" title={log.userAgent}>{log.userAgent || "-"}</TableCell>}
                   </TableRow>
                 ))
               )}

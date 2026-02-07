@@ -105,16 +105,16 @@ function AIMessageContent({ content, uiPayload }: { content: string; uiPayload?:
   })() : null
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3 w-full">
       {blocks.map((block, idx) => {
         if (block.type === "table" && block.headers && block.rows) {
           return (
-            <div key={idx} className="overflow-x-auto rounded-lg border border-border">
-              <table className="min-w-full text-xs">
+            <div key={idx} className="overflow-x-auto rounded-lg border border-border -mx-1">
+              <table className="w-full text-xs border-collapse">
                 <thead className="bg-muted/50">
                   <tr>
                     {block.headers.map((h, i) => (
-                      <th key={i} className="px-3 py-2 text-left font-medium text-muted-foreground">
+                      <th key={i} className="px-3 py-2.5 text-left font-semibold text-muted-foreground whitespace-nowrap">
                         {h}
                       </th>
                     ))}
@@ -122,9 +122,9 @@ function AIMessageContent({ content, uiPayload }: { content: string; uiPayload?:
                 </thead>
                 <tbody>
                   {block.rows.map((row, ri) => (
-                    <tr key={ri} className="border-t border-border">
+                    <tr key={ri} className="border-t border-border hover:bg-muted/30 transition-colors">
                       {row.map((cell, ci) => (
-                        <td key={ci} className="px-3 py-2">
+                        <td key={ci} className="px-3 py-2 whitespace-nowrap">
                           {cell}
                         </td>
                       ))}
@@ -137,8 +137,10 @@ function AIMessageContent({ content, uiPayload }: { content: string; uiPayload?:
         }
         // Default: message block with markdown rendering (GFM tables enabled)
         return (
-          <div key={idx} className="prose-sm prose-slate dark:prose-invert max-w-none">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{block.text || ""}</ReactMarkdown>
+          <div key={idx} className="prose-sm prose-slate dark:prose-invert max-w-none [&_table]:w-full [&_table]:border-collapse [&_table]:text-xs [&_table]:rounded-lg [&_table]:overflow-hidden [&_thead]:bg-muted/50 [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:font-semibold [&_th]:whitespace-nowrap [&_td]:px-3 [&_td]:py-2 [&_td]:whitespace-nowrap [&_td]:border-t [&_td]:border-border [&_tr]:hover:bg-muted/30 [&_pre]:overflow-x-auto [&_pre]:max-w-full [&_code]:break-words">
+            <div className="overflow-x-auto">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{block.text || ""}</ReactMarkdown>
+            </div>
           </div>
         )
       })}
@@ -173,13 +175,16 @@ function ChatBubble({ message }: { message: ChatMessage }) {
           <Anchor className="h-4 w-4 text-[hsl(0,0%,100%)]" />
         )}
       </div>
-      <div className={cn("flex max-w-[75%] flex-col gap-1", isUser ? "items-end" : "items-start")}>
+      <div className={cn(
+        "flex flex-col gap-1 min-w-0",
+        isUser ? "items-end max-w-[75%]" : "items-start max-w-[85%]",
+      )}>
         <div
           className={cn(
-            "rounded-xl px-4 py-2.5 text-sm leading-relaxed",
+            "rounded-xl px-4 py-2.5 text-sm leading-relaxed min-w-0",
             isUser
               ? "rounded-tr-sm bg-primary text-primary-foreground whitespace-pre-wrap"
-              : "rounded-tl-sm border border-border bg-card text-foreground",
+              : "rounded-tl-sm border border-border bg-card text-foreground w-full overflow-hidden",
           )}
         >
           {isUser ? message.text : <AIMessageContent content={message.text} uiPayload={message.uiPayload} />}
@@ -489,7 +494,7 @@ export default function ChatPage() {
               </div>
             </div>
           ) : (
-            <div className="mx-auto max-w-3xl px-6 py-6">
+            <div className="mx-auto max-w-4xl px-4 sm:px-6 py-6">
               <div className="flex flex-col gap-6">
                 {messages.map((msg) => (
                   <ChatBubble key={msg.id} message={msg} />
