@@ -208,7 +208,7 @@ export function LoginForm() {
       <div className="relative hidden w-[55%] lg:block">
         <div
           className="absolute inset-0 bg-cover bg-center"
-          style={{ backgroundImage: "url('/images/port-hero.jpg')" }}
+          style={{ backgroundImage: "url('/port-hero.jpg')" }}
         />
         <div className="absolute inset-0 bg-[hsl(215,70%,10%)]/80" />
         <div className="relative z-10 flex h-full flex-col justify-between p-10">

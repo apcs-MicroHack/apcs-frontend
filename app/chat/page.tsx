@@ -12,6 +12,7 @@ import {
   Trash2,
   Clock,
   Loader2,
+  FileText,
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -22,11 +23,25 @@ import { TypingIndicator } from "@/components/ui/typing-indicator"
 import type { ChatSession } from "@/services/types"
 
 // ── Local UI types ──────────────────────────────────────────
+interface UIPayload {
+  ui_action?: "OPEN_BOOKING_FORM" | string
+  prefill?: {
+    date?: string
+    time?: string
+    terminal?: string
+    cargoType?: string
+    containerNumber?: string
+    isHazardous?: boolean
+    specialRequirements?: string
+  }
+}
+
 interface ChatMessage {
   id: string
   role: "user" | "assistant"
   text: string
   timestamp: string
+  uiPayload?: UIPayload
 }
 
 // ── Helpers ─────────────────────────────────────────────────
@@ -45,6 +60,100 @@ function nowTime() {
     minute: "2-digit",
     hour12: false,
   })
+}
+
+// ── Parse AI response blocks ────────────────────────────────
+interface AIBlock {
+  type: "message" | "table"
+  text?: string
+  headers?: string[]
+  rows?: string[][]
+}
+
+function parseAIContent(content: string): AIBlock[] {
+  try {
+    const parsed = JSON.parse(content)
+    if (parsed.blocks && Array.isArray(parsed.blocks)) {
+      return parsed.blocks
+    }
+    // If it's a valid JSON but not in blocks format, return as message
+    return [{ type: "message", text: content }]
+  } catch {
+    // Plain text - return as-is
+    return [{ type: "message", text: content }]
+  }
+}
+
+function AIMessageContent({ content, uiPayload }: { content: string; uiPayload?: UIPayload }) {
+  const blocks = parseAIContent(content)
+
+  // Build booking button if uiPayload has OPEN_BOOKING_FORM action
+  const showBookingButton = uiPayload?.ui_action === "OPEN_BOOKING_FORM" && uiPayload.prefill
+  const bookingUrl = showBookingButton ? (() => {
+    const params = new URLSearchParams()
+    const p = uiPayload.prefill!
+    if (p.terminal) params.set("terminal", p.terminal)
+    if (p.date) params.set("date", p.date)
+    if (p.time) params.set("startTime", p.time)
+    if (p.cargoType) params.set("cargoType", p.cargoType)
+    if (p.containerNumber) params.set("containerNumber", p.containerNumber)
+    if (p.isHazardous) params.set("isHazardous", "true")
+    if (p.specialRequirements) params.set("specialRequirements", p.specialRequirements)
+    return `/carrier/create-booking?${params.toString()}`
+  })() : null
+
+  return (
+    <div className="flex flex-col gap-3">
+      {blocks.map((block, idx) => {
+        if (block.type === "table" && block.headers && block.rows) {
+          return (
+            <div key={idx} className="overflow-x-auto rounded-lg border border-border">
+              <table className="min-w-full text-xs">
+                <thead className="bg-muted/50">
+                  <tr>
+                    {block.headers.map((h, i) => (
+                      <th key={i} className="px-3 py-2 text-left font-medium text-muted-foreground">
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {block.rows.map((row, ri) => (
+                    <tr key={ri} className="border-t border-border">
+                      {row.map((cell, ci) => (
+                        <td key={ci} className="px-3 py-2">
+                          {cell}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
+        }
+        // Default: message block with HTML support
+        return (
+          <div
+            key={idx}
+            className="prose-sm prose-slate dark:prose-invert max-w-none"
+            dangerouslySetInnerHTML={{ __html: block.text || "" }}
+          />
+        )
+      })}
+      {/* Booking prefill button from uiPayload */}
+      {showBookingButton && bookingUrl && (
+        <Link
+          href={bookingUrl}
+          className="inline-flex w-fit items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+        >
+          <FileText className="h-4 w-4" />
+          Open Booking Form
+        </Link>
+      )}
+    </div>
+  )
 }
 
 // ── Chat bubble ─────────────────────────────────────────────
@@ -67,13 +176,13 @@ function ChatBubble({ message }: { message: ChatMessage }) {
       <div className={cn("flex max-w-[75%] flex-col gap-1", isUser ? "items-end" : "items-start")}>
         <div
           className={cn(
-            "rounded-xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap",
+            "rounded-xl px-4 py-2.5 text-sm leading-relaxed",
             isUser
-              ? "rounded-tr-sm bg-primary text-primary-foreground"
+              ? "rounded-tr-sm bg-primary text-primary-foreground whitespace-pre-wrap"
               : "rounded-tl-sm border border-border bg-card text-foreground",
           )}
         >
-          {message.text}
+          {isUser ? message.text : <AIMessageContent content={message.text} uiPayload={message.uiPayload} />}
         </div>
         <span className="text-[10px] text-muted-foreground">{message.timestamp}</span>
       </div>
@@ -108,11 +217,12 @@ export default function ChatPage() {
   const loadMessages = useCallback(async (sessionId: string) => {
     try {
       const res = await chatService.getMessages(sessionId)
-      const msgs: ChatMessage[] = (res.messages ?? []).map((m: any, i: number) => ({
+      const msgs: ChatMessage[] = (res.messages ?? []).map((m, i) => ({
         id: m.id ?? `msg-${i}`,
-        role: m.role === "user" ? "user" : "assistant",
+        role: m.role === "USER" ? "user" : "assistant",
         text: typeof m.content === "string" ? m.content : JSON.stringify(m.content),
         timestamp: timeLabel(m.createdAt) || "",
+        uiPayload: m.uiPayload as UIPayload | undefined,
       }))
       setMessages(msgs)
     } catch {
@@ -158,14 +268,62 @@ export default function ChatPage() {
     /* Call API */
     setIsLoading(true)
     try {
-      await chatService.sendMessage(sessionId, text)
-      /* Reload messages to get the AI response */
-      await loadMessages(sessionId)
-    } catch {
-      setMessages((prev) => [
-        ...prev,
-        { id: `e-${Date.now()}`, role: "assistant", text: "Sorry, something went wrong. Please try again.", timestamp: nowTime() },
-      ])
+      const response = await chatService.sendMessage(sessionId, text)
+      
+      /* Update user message with actual ID and add assistant response */
+      setMessages((prev) => {
+        // Replace optimistic user message with actual one
+        const updated = prev.map((m) =>
+          m.id === userMsg.id
+            ? {
+                id: response.userMessage.id,
+                role: "user" as const,
+                text: response.userMessage.content,
+                timestamp: timeLabel(response.userMessage.createdAt) || nowTime(),
+              }
+            : m
+        )
+        // Add assistant response
+        return [
+          ...updated,
+          {
+            id: response.assistantMessage.id,
+            role: "assistant" as const,
+            text: response.assistantMessage.content,
+            timestamp: timeLabel(response.assistantMessage.createdAt) || nowTime(),
+            uiPayload: response.assistantMessage.uiPayload as UIPayload | undefined,
+          },
+        ]
+      })
+      
+      // Update session title in sidebar if needed
+      setSessions((prev) =>
+        prev.map((s) =>
+          s.id === sessionId
+            ? { ...s, updatedAt: new Date().toISOString(), title: s.title === "New Chat" ? text.slice(0, 50) : s.title }
+            : s
+        )
+      )
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { status?: number; data?: { assistantMessage?: { content?: string } } } }
+      // Handle 502 errors which include a fallback assistant message
+      if (axiosErr?.response?.status === 502 && axiosErr?.response?.data?.assistantMessage) {
+        const fallback = axiosErr.response.data.assistantMessage
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `e-${Date.now()}`,
+            role: "assistant" as const,
+            text: fallback.content ?? "AI service is temporarily unavailable.",
+            timestamp: nowTime(),
+          },
+        ])
+      } else {
+        setMessages((prev) => [
+          ...prev,
+          { id: `e-${Date.now()}`, role: "assistant", text: "Sorry, something went wrong. Please try again.", timestamp: nowTime() },
+        ])
+      }
     } finally {
       setIsLoading(false)
     }

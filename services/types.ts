@@ -72,6 +72,14 @@ export interface User {
   terminalAssignedAt?: string | null
   // Also support array format if backend ever changes
   operatorTerminals?: OperatorTerminalAssignment[]
+  // Backend returns singular operatorTerminal with nested terminal
+  operatorTerminal?: {
+    terminal: {
+      id: string
+      name: string
+      code: string
+    }
+  } | null
 }
 
 export interface CarrierBrief {
@@ -233,6 +241,17 @@ export interface Notification {
 
 // ── Chat ─────────────────────────────────────────────────────
 
+export interface ChatMessage {
+  id: string
+  content: string
+  role: "USER" | "ASSISTANT"
+  createdAt: string
+  uiPayload?: unknown
+  routeLock?: string | null
+  currentIntent?: string | null
+  languageDetected?: string | null
+}
+
 export interface ChatSession {
   id: string
   threadId: string
@@ -240,6 +259,8 @@ export interface ChatSession {
   createdAt: string
   updatedAt: string
   userId: string
+  messageCount?: number
+  lastMessage?: Pick<ChatMessage, "content" | "role" | "createdAt"> | null
 }
 
 // ── Pagination ───────────────────────────────────────────────

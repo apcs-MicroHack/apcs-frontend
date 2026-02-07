@@ -1,5 +1,5 @@
 import api from "./axios"
-import type { ChatSession } from "./types"
+import type { ChatSession, ChatMessage } from "./types"
 
 // ── List sessions ────────────────────────────────────────────
 
@@ -45,10 +45,16 @@ export async function deleteChatSession(id: string): Promise<void> {
 
 // ── Messages ─────────────────────────────────────────────────
 
+export interface SendMessageResponse {
+  userMessage: ChatMessage
+  assistantMessage: ChatMessage
+  error?: string
+}
+
 export async function sendMessage(
   sessionId: string,
   message: string,
-): Promise<{ threadId: string }> {
+): Promise<SendMessageResponse> {
   const { data } = await api.post(`/chat/sessions/${sessionId}/messages`, {
     message,
   })
@@ -57,7 +63,7 @@ export async function sendMessage(
 
 export async function getMessages(
   sessionId: string,
-): Promise<{ messages: unknown[]; threadId: string }> {
+): Promise<{ messages: ChatMessage[]; pagination: { total: number; limit: number; offset: number } }> {
   const { data } = await api.get(`/chat/sessions/${sessionId}/messages`)
   return data
 }

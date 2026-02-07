@@ -269,7 +269,26 @@ export default function AdminUsersPage() {
       setAssignLoading(true)
       try {
         const terminals = await terminalService.getTerminals()
-        setAvailableTerminals(terminals)
+        // Filter out terminals that already have an operator assigned
+        const assignedTerminalIds = new Set(
+          userList
+            .filter((u) => u.role === "OPERATOR")
+            .flatMap((u) => {
+              // Support multiple backend response formats
+              const ids: string[] = []
+              // Direct terminal field
+              if (u.terminal?.id) ids.push(u.terminal.id)
+              // Singular operatorTerminal with nested terminal (current backend format)
+              if (u.operatorTerminal?.terminal?.id) ids.push(u.operatorTerminal.terminal.id)
+              // Array format
+              if (u.operatorTerminals) {
+                ids.push(...u.operatorTerminals.map((ot) => ot.terminalId))
+              }
+              return ids
+            })
+        )
+        const unassignedTerminals = terminals.filter((t) => !assignedTerminalIds.has(t.id))
+        setAvailableTerminals(unassignedTerminals)
       } catch { setAvailableTerminals([]) }
       finally { setAssignLoading(false) }
     }

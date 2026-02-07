@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
+import { useSearchParams } from "next/navigation"
 import {
   Calendar as CalendarIcon,
   Container,
@@ -83,6 +84,41 @@ export default function CreateBookingPage() {
   const [containerNumber, setContainerNumber] = useState("")
   const [isHazardous, setIsHazardous] = useState(false)
   const [specialRequirements, setSpecialRequirements] = useState("")
+  const searchParams = useSearchParams()
+  
+  // Track prefilled slot to apply after slots load
+  const prefillSlotRef = useRef<string | null>(null)
+
+  // Pre-fill from query params (from chat AI)
+  useEffect(() => {
+    const prefillTerminalId = searchParams.get("terminalId")
+    const prefillTerminalName = searchParams.get("terminal")
+    const prefillDate = searchParams.get("date")
+    const prefillCargoType = searchParams.get("cargoType")
+    const prefillContainer = searchParams.get("containerNumber")
+    const prefillHazardous = searchParams.get("isHazardous")
+    const prefillRequirements = searchParams.get("specialRequirements")
+    const prefillSlot = searchParams.get("startTime")
+
+    // Store prefill slot for later
+    if (prefillSlot) prefillSlotRef.current = prefillSlot
+
+    // Match terminal by ID or by name
+    if (prefillTerminalId) {
+      setTerminalId(prefillTerminalId)
+    } else if (prefillTerminalName && terminals && terminals.length > 0) {
+      const match = terminals.find(
+        (t) => t.name.toLowerCase() === prefillTerminalName.toLowerCase() ||
+               t.code?.toLowerCase() === prefillTerminalName.toLowerCase()
+      )
+      if (match) setTerminalId(match.id)
+    }
+    if (prefillDate) setDate(prefillDate)
+    if (prefillCargoType) setCargoType(prefillCargoType)
+    if (prefillContainer) setContainerNumber(prefillContainer)
+    if (prefillHazardous === "true") setIsHazardous(true)
+    if (prefillRequirements) setSpecialRequirements(prefillRequirements)
+  }, [searchParams, terminals])
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [bookingRef, setBookingRef] = useState("")
@@ -107,7 +143,17 @@ export default function CreateBookingPage() {
         const slots: AvailabilitySlot[] =
           dayData && !dayData.isClosed ? (dayData.slots ?? []) : []
         setAvailableSlots(slots)
-        setSlotId("")
+        
+        // Apply prefilled slot if it exists and is available
+        if (prefillSlotRef.current) {
+          const matchingSlot = slots.find(s => s.startTime === prefillSlotRef.current)
+          if (matchingSlot) {
+            setSlotId(prefillSlotRef.current)
+          }
+          prefillSlotRef.current = null // Clear after applying
+        } else {
+          setSlotId("")
+        }
       }
     }).catch(() => {
       if (!cancelled) setAvailableSlots([])
