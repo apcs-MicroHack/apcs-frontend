@@ -24,9 +24,48 @@ import { cn } from "@/lib/utils"
 import { api } from "@/services"
 
 interface SuggestionsResponse {
-  suggestions: string
+  suggestions: unknown
   generatedAt: string
   cached: boolean
+}
+
+/** Normalize suggestions to a markdown string regardless of what the API returns */
+function normalizeSuggestions(raw: unknown): string {
+  if (typeof raw === "string") return raw
+  if (Array.isArray(raw)) {
+    return raw
+      .map((item, i) => {
+        if (typeof item === "string") return item
+        if (typeof item === "object" && item !== null) {
+          const obj = item as Record<string, unknown>
+          // Try common field names for title/description shaped objects
+          const title = obj.title ?? obj.name ?? obj.label ?? ""
+          const desc = obj.description ?? obj.message ?? obj.text ?? obj.content ?? ""
+          const type = obj.type ?? obj.category ?? ""
+          const priority = obj.priority ?? ""
+          const metric = obj.metric as Record<string, unknown> | undefined
+
+          let line = `### ${title || `Suggestion ${i + 1}`}`
+          if (type) line += `  \n**Type:** ${type}`
+          if (priority) line += ` · **Priority:** ${priority}`
+          if (metric) {
+            const metricLabel = metric.label ?? ""
+            const metricValue = metric.value ?? ""
+            const metricTrend = metric.trend ?? ""
+            if (metricLabel || metricValue)
+              line += ` · **${metricLabel}:** ${metricValue}${metricTrend ? ` (${metricTrend})` : ""}`
+          }
+          if (desc) line += `\n\n${desc}`
+          return line
+        }
+        return String(item)
+      })
+      .join("\n\n---\n\n")
+  }
+  if (typeof raw === "object" && raw !== null) {
+    return JSON.stringify(raw, null, 2)
+  }
+  return String(raw ?? "")
 }
 
 export function AISuggestions() {
@@ -149,7 +188,7 @@ export function AISuggestions() {
               <div className="prose prose-sm prose-slate dark:prose-invert max-w-none [&_table]:w-full [&_table]:border-collapse [&_table]:text-xs [&_table]:rounded-lg [&_thead]:bg-muted/50 [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:font-semibold [&_td]:px-3 [&_td]:py-2 [&_td]:border-t [&_td]:border-border [&_tr]:hover:bg-muted/30 [&_pre]:overflow-x-auto [&_code]:break-words [&_ul]:space-y-1 [&_ol]:space-y-1 [&_li]:text-sm [&_p]:text-sm [&_p]:leading-relaxed [&_h1]:text-lg [&_h1]:font-bold [&_h2]:text-base [&_h2]:font-semibold [&_h3]:text-sm [&_h3]:font-semibold [&_strong]:text-foreground [&_blockquote]:border-l-primary/50 [&_blockquote]:text-muted-foreground">
                 <div className="overflow-x-auto">
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {data.suggestions}
+                    {normalizeSuggestions(data.suggestions)}
                   </ReactMarkdown>
                 </div>
               </div>
