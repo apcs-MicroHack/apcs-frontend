@@ -28,6 +28,7 @@ export function LoginForm() {
   const [showForgotPassword, setShowForgotPassword] = useState(false)
   const [resetEmail, setResetEmail] = useState("")
   const [resetSent, setResetSent] = useState(false)
+  const [showContactAdmin, setShowContactAdmin] = useState(false)
 
   // 2FA state
   const [needs2FA, setNeeds2FA] = useState(false)
@@ -434,7 +435,11 @@ export function LoginForm() {
 
           <p className="mt-6 text-center text-xs text-muted-foreground">
             {"Don't have an account? "}
-            <button type="button" className="font-medium text-accent hover:text-accent/80 transition-colors">
+            <button
+              type="button"
+              onClick={() => setShowContactAdmin(true)}
+              className="font-medium text-accent hover:text-accent/80 transition-colors"
+            >
               Contact your administrator
             </button>
           </p>
@@ -505,6 +510,52 @@ export function LoginForm() {
                 </div>
               </form>
             )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Contact Administrator Dialog */}
+        <Dialog open={showContactAdmin} onOpenChange={setShowContactAdmin}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="font-heading text-xl font-bold">
+                Contact Administrator
+              </DialogTitle>
+              <DialogDescription>
+                To request account access, please contact your system administrator:
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="rounded-lg border border-border bg-muted/50 px-4 py-4">
+              <p className="mb-3 text-sm text-muted-foreground">Administrator Email:</p>
+              <p className="font-mono text-sm font-medium text-foreground break-all">
+                support@apcs.local
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                onClick={() => setShowContactAdmin(false)}
+                className="flex-1"
+              >
+                Close
+              </Button>
+              <Button
+                onClick={() => {
+                  navigator.clipboard.writeText("support@apcs.local")
+                  // Show brief feedback
+                  const btn = document.activeElement as HTMLButtonElement
+                  const originalText = btn?.textContent
+                  if (btn) btn.textContent = "Copied!"
+                  setTimeout(() => {
+                    if (btn) btn.textContent = originalText
+                  }, 2000)
+                }}
+                className="flex-1 bg-primary font-medium text-primary-foreground hover:bg-primary/90"
+              >
+                Copy Email
+              </Button>
+            </div>
           </DialogContent>
         </Dialog>
       </div>
