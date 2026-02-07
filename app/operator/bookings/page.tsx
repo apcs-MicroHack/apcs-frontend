@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useSearchParams } from "next/navigation"
 import {
   Search,
@@ -47,6 +47,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useApi } from "@/hooks/use-api"
 import { bookingService, authService } from "@/services"
 import type { Booking, BookingStatus, CargoType } from "@/services/types"
+import type { PaginatedBookingsResponse } from "@/services/booking.service"
 
 // ── Status badge ─────────────────────────────────────────────
 
@@ -92,7 +93,7 @@ function formatSlot(slot: Booking["timeSlot"]) {
 
 // ── Constants ────────────────────────────────────────────────
 
-const ITEMS_PER_PAGE = 8
+const ITEMS_PER_PAGE = 10
 
 // ── Page Component ───────────────────────────────────────────
 
@@ -107,15 +108,20 @@ export default function OperatorBookingsPage() {
     })
   }, [])
 
-  const { data: bookings, loading, error, refetch } = useApi<Booking[]>(
-    () => terminalId ? bookingService.getBookings({ terminalId }) : Promise.resolve([]),
-    [terminalId],
-  )
-
   const [search, setSearch] = useState("")
+  const [debouncedSearch, setDebouncedSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [page, setPage] = useState(1)
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
+
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search)
+      setPage(1)
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [search])
 
   // Read search query from URL (set by operator header)
   useEffect(() => {
@@ -123,26 +129,45 @@ export default function OperatorBookingsPage() {
     if (q) setSearch(q)
   }, [searchParams])
 
-  const filtered = useMemo(() => {
-    if (!bookings) return []
-    return bookings.filter((b) => {
-      const q = search.toLowerCase()
-      const matchesSearch =
-        search === "" ||
-        b.bookingNumber.toLowerCase().includes(q) ||
-        b.carrier.companyName.toLowerCase().includes(q) ||
-        b.truck.plateNumber.toLowerCase().includes(q) ||
-        (b.containerNumber ?? "").toLowerCase().includes(q)
-      const matchesStatus = statusFilter === "all" || b.status === statusFilter
-      return matchesSearch && matchesStatus
-    })
-  }, [bookings, search, statusFilter])
+  const emptyResponse: PaginatedBookingsResponse = { bookings: [], pagination: { page: 1, limit: ITEMS_PER_PAGE, totalCount: 0, totalPages: 0, hasNextPage: false, hasPrevPage: false } }
 
-  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE)
-  const paged = filtered.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE)
+  const { data, loading, error, refetch } = useApi<PaginatedBookingsResponse>(
+    () => terminalId
+      ? bookingService.getBookings({
+          terminalId,
+          page,
+          limit: ITEMS_PER_PAGE,
+          ...(statusFilter !== "all" && { status: statusFilter as BookingStatus }),
+          ...(debouncedSearch && { search: debouncedSearch }),
+        })
+      : Promise.resolve(emptyResponse),
+    [terminalId, page, statusFilter, debouncedSearch],
+  )
+
+  const bookings = data?.bookings ?? []
+  const pagination = data?.pagination
+  const totalPages = pagination?.totalPages ?? 1
+  const totalCount = pagination?.totalCount ?? 0
+
+  // Pagination range helper
+  const getPaginationRange = useCallback((): (number | "ellipsis")[] => {
+    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1)
+    const pages: (number | "ellipsis")[] = []
+    if (page <= 4) {
+      for (let i = 1; i <= 5; i++) pages.push(i)
+      pages.push("ellipsis", totalPages)
+    } else if (page >= totalPages - 3) {
+      pages.push(1, "ellipsis")
+      for (let i = totalPages - 4; i <= totalPages; i++) pages.push(i)
+    } else {
+      pages.push(1, "ellipsis", page - 1, page, page + 1, "ellipsis", totalPages)
+    }
+    return pages
+  }, [page, totalPages])
 
   const clearFilters = () => {
     setSearch("")
+    setDebouncedSearch("")
     setStatusFilter("all")
     setPage(1)
   }
@@ -171,7 +196,7 @@ export default function OperatorBookingsPage() {
         <div>
           <h1 className="font-heading text-2xl font-bold text-foreground">Bookings</h1>
           <p className="text-sm text-muted-foreground">
-            Terminal bookings ({loading ? "…" : `${filtered.length} total`})
+            Terminal bookings ({loading ? "…" : `${totalCount} total`})
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -201,7 +226,7 @@ export default function OperatorBookingsPage() {
               <Input
                 placeholder="Search by booking #, carrier, plate, or container..."
                 value={search}
-                onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+                onChange={(e) => setSearch(e.target.value)}
                 className="h-9 bg-muted/50 pl-9 text-sm"
               />
             </div>
@@ -262,14 +287,14 @@ export default function OperatorBookingsPage() {
                     <TableCell className="pr-6 text-right"><Skeleton className="ml-auto h-8 w-8 rounded" /></TableCell>
                   </TableRow>
                 ))
-              ) : paged.length === 0 ? (
+              ) : bookings.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={8} className="py-12 text-center text-muted-foreground">
                     No bookings found matching your filters.
                   </TableCell>
                 </TableRow>
               ) : (
-                paged.map((booking) => (
+                bookings.map((booking) => (
                   <TableRow key={booking.id} className="cursor-pointer" onClick={() => setSelectedBooking(booking)}>
                     <TableCell className="pl-6 font-mono text-xs font-medium text-foreground">
                       {booking.bookingNumber}
@@ -309,7 +334,7 @@ export default function OperatorBookingsPage() {
           {!loading && totalPages > 1 && (
             <div className="flex items-center justify-between border-t border-border px-6 py-3">
               <p className="text-xs text-muted-foreground">
-                Showing {(page - 1) * ITEMS_PER_PAGE + 1}–{Math.min(page * ITEMS_PER_PAGE, filtered.length)} of {filtered.length}
+                Showing {(page - 1) * ITEMS_PER_PAGE + 1}–{Math.min(page * ITEMS_PER_PAGE, totalCount)} of {totalCount}
               </p>
               <div className="flex items-center gap-1">
                 <Button
@@ -317,44 +342,32 @@ export default function OperatorBookingsPage() {
                   size="icon"
                   className="h-8 w-8"
                   onClick={() => setPage(page - 1)}
-                  disabled={page === 1}
+                  disabled={!pagination?.hasPrevPage}
                   aria-label="Previous page"
                 >
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
-                {(() => {
-                  const pages: (number | "ellipsis")[] = []
-                  if (totalPages <= 7) {
-                    for (let i = 1; i <= totalPages; i++) pages.push(i)
-                  } else {
-                    pages.push(1)
-                    if (page > 3) pages.push("ellipsis")
-                    for (let i = Math.max(2, page - 1); i <= Math.min(totalPages - 1, page + 1); i++) pages.push(i)
-                    if (page < totalPages - 2) pages.push("ellipsis")
-                    pages.push(totalPages)
-                  }
-                  return pages.map((p, idx) =>
-                    p === "ellipsis" ? (
-                      <span key={`e${idx}`} className="flex h-8 w-8 items-center justify-center text-xs text-muted-foreground">…</span>
-                    ) : (
-                      <Button
-                        key={p}
-                        variant={p === page ? "default" : "ghost"}
-                        size="icon"
-                        className="h-8 w-8 text-xs"
-                        onClick={() => setPage(p)}
-                      >
-                        {p}
-                      </Button>
-                    )
+                {getPaginationRange().map((p, idx) =>
+                  p === "ellipsis" ? (
+                    <span key={`e${idx}`} className="flex h-8 w-8 items-center justify-center text-xs text-muted-foreground">…</span>
+                  ) : (
+                    <Button
+                      key={p}
+                      variant={p === page ? "default" : "ghost"}
+                      size="icon"
+                      className="h-8 w-8 text-xs"
+                      onClick={() => setPage(p)}
+                    >
+                      {p}
+                    </Button>
                   )
-                })()}
+                )}
                 <Button
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8"
                   onClick={() => setPage(page + 1)}
-                  disabled={page === totalPages}
+                  disabled={!pagination?.hasNextPage}
                   aria-label="Next page"
                 >
                   <ChevronRight className="h-4 w-4" />

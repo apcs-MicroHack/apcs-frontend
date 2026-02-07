@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useCallback } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useSearchParams } from "next/navigation"
 import {
   Search,
@@ -44,8 +44,9 @@ import {
 } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useApi } from "@/hooks/use-api"
-import { bookingService } from "@/services"
-import type { Booking, BookingStatus, CargoType } from "@/services/types"
+import { bookingService, terminalService } from "@/services"
+import type { Booking, BookingStatus, CargoType, Terminal } from "@/services/types"
+import type { PaginatedBookingsResponse } from "@/services/booking.service"
 
 // -- Status badge -------------------------------------------------------------
 
@@ -97,54 +98,56 @@ function TableSkeleton() {
   )
 }
 
-const ITEMS_PER_PAGE = 8
+const ITEMS_PER_PAGE = 10
 
 export default function AdminBookingsPage() {
-  const { data: bookings, loading, error, refetch } = useApi<Booking[]>(
-    () => bookingService.getBookings(),
-    [],
-  )
-
   const searchParams = useSearchParams()
   const initialSearch = searchParams.get("search") ?? ""
 
   const [search, setSearch] = useState(initialSearch)
+  const [debouncedSearch, setDebouncedSearch] = useState(initialSearch)
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [terminalFilter, setTerminalFilter] = useState<string>("all")
   const [page, setPage] = useState(1)
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
 
-  // Derive unique terminal names from the API data
-  const terminalOptions = useMemo(() => {
-    if (!bookings) return []
-    const unique = Array.from(new Set(bookings.map((b) => b.terminal.name))).sort()
-    return unique
-  }, [bookings])
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search)
+      setPage(1)
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [search])
 
-  const filtered = useMemo(() => {
-    if (!bookings) return []
-    return bookings.filter((b) => {
-      const searchLower = search.toLowerCase()
-      const matchesSearch =
-        search === "" ||
-        b.bookingNumber.toLowerCase().includes(searchLower) ||
-        b.carrier.companyName.toLowerCase().includes(searchLower) ||
-        b.truck.plateNumber.toLowerCase().includes(searchLower) ||
-        (b.containerNumber ?? "").toLowerCase().includes(searchLower)
-      const matchesStatus = statusFilter === "all" || b.status === statusFilter
-      const matchesTerminal = terminalFilter === "all" || b.terminal.name === terminalFilter
-      return matchesSearch && matchesStatus && matchesTerminal
-    })
-  }, [bookings, search, statusFilter, terminalFilter])
+  // Fetch terminals for the filter dropdown
+  const { data: terminals } = useApi<Terminal[]>(
+    () => terminalService.getTerminals(),
+    [],
+  )
 
-  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE)
-  const paged = filtered.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE)
+  // Server-side paginated bookings
+  const { data, loading, error, refetch } = useApi<PaginatedBookingsResponse>(
+    () => bookingService.getBookings({
+      page,
+      limit: ITEMS_PER_PAGE,
+      ...(statusFilter !== "all" && { status: statusFilter as BookingStatus }),
+      ...(terminalFilter !== "all" && { terminalId: terminalFilter }),
+      ...(debouncedSearch && { search: debouncedSearch }),
+    }),
+    [page, statusFilter, terminalFilter, debouncedSearch],
+  )
 
-  // -- Export CSV ---------------------------------------------------------------
+  const bookings = data?.bookings ?? []
+  const pagination = data?.pagination
+  const totalPages = pagination?.totalPages ?? 1
+  const totalCount = pagination?.totalCount ?? 0
+
+  // -- Export CSV (current page) ------------------------------------------------
   const handleExportCSV = useCallback(() => {
-    if (!filtered.length) return
+    if (!bookings.length) return
     const headers = ["Booking ID", "Carrier", "Terminal", "Date", "Time Slot", "Truck Plate", "Cargo Type", "Status", "Container Number"]
-    const rows = filtered.map((b) => [
+    const rows = bookings.map((b) => [
       b.bookingNumber,
       b.carrier.companyName,
       b.terminal.name,
@@ -163,7 +166,7 @@ export default function AdminBookingsPage() {
     a.download = `bookings_${new Date().toISOString().slice(0, 10)}.csv`
     a.click()
     URL.revokeObjectURL(url)
-  }, [filtered])
+  }, [bookings])
 
   // -- Pagination helper (max 7 visible buttons) --------------------------------
   const getPaginationRange = useCallback((): (number | "ellipsis")[] => {
@@ -184,6 +187,7 @@ export default function AdminBookingsPage() {
 
   const clearFilters = () => {
     setSearch("")
+    setDebouncedSearch("")
     setStatusFilter("all")
     setTerminalFilter("all")
     setPage(1)
@@ -213,14 +217,14 @@ export default function AdminBookingsPage() {
         <div>
           <h1 className="font-heading text-2xl font-bold text-foreground">Bookings</h1>
           <p className="text-sm text-muted-foreground">
-            All booking records across terminals ({loading ? "\u2026" : `${filtered.length} total`})
+            All booking records across terminals ({loading ? "\u2026" : `${totalCount} total`})
           </p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="icon" className="h-9 w-9" onClick={refetch} disabled={loading} aria-label="Refresh">
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           </Button>
-          <Button variant="outline" className="gap-2 bg-transparent" onClick={handleExportCSV} disabled={!filtered.length}>
+          <Button variant="outline" className="gap-2 bg-transparent" onClick={handleExportCSV} disabled={!bookings.length}>
             <Download className="h-4 w-4" />
             Export CSV
           </Button>
@@ -236,7 +240,7 @@ export default function AdminBookingsPage() {
               <Input
                 placeholder="Search by ID, carrier, plate, or container..."
                 value={search}
-                onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+                onChange={(e) => setSearch(e.target.value)}
                 className="h-9 bg-muted/50 pl-9 text-sm"
               />
             </div>
@@ -262,8 +266,8 @@ export default function AdminBookingsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Terminals</SelectItem>
-                  {terminalOptions.map((t) => (
-                    <SelectItem key={t} value={t}>{t}</SelectItem>
+                  {(terminals ?? []).filter(t => t.isActive).map((t) => (
+                    <SelectItem key={t.id} value={t.id}>{t.name} ({t.code})</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -298,14 +302,14 @@ export default function AdminBookingsPage() {
             <TableBody>
               {loading ? (
                 <TableSkeleton />
-              ) : paged.length === 0 ? (
+              ) : bookings.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={9} className="py-12 text-center text-muted-foreground">
                     No bookings found matching your filters.
                   </TableCell>
                 </TableRow>
               ) : (
-                paged.map((booking) => (
+                bookings.map((booking) => (
                   <TableRow key={booking.id} className="cursor-pointer" onClick={() => setSelectedBooking(booking)}>
                     <TableCell className="pl-6 font-mono text-xs font-medium text-foreground">
                       {booking.bookingNumber}
@@ -348,7 +352,7 @@ export default function AdminBookingsPage() {
           {!loading && totalPages > 1 && (
             <div className="flex items-center justify-between border-t border-border px-6 py-3">
               <p className="text-xs text-muted-foreground">
-                Showing {(page - 1) * ITEMS_PER_PAGE + 1}-{Math.min(page * ITEMS_PER_PAGE, filtered.length)} of {filtered.length}
+                Showing {(page - 1) * ITEMS_PER_PAGE + 1}-{Math.min(page * ITEMS_PER_PAGE, totalCount)} of {totalCount}
               </p>
               <div className="flex items-center gap-1">
                 <Button
@@ -356,7 +360,7 @@ export default function AdminBookingsPage() {
                   size="icon"
                   className="h-8 w-8"
                   onClick={() => setPage(page - 1)}
-                  disabled={page === 1}
+                  disabled={!pagination?.hasPrevPage}
                   aria-label="Previous page"
                 >
                   <ChevronLeft className="h-4 w-4" />
@@ -381,7 +385,7 @@ export default function AdminBookingsPage() {
                   size="icon"
                   className="h-8 w-8"
                   onClick={() => setPage(page + 1)}
-                  disabled={page === totalPages}
+                  disabled={!pagination?.hasNextPage}
                   aria-label="Next page"
                 >
                   <ChevronRight className="h-4 w-4" />

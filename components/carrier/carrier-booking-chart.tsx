@@ -25,6 +25,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useApi } from "@/hooks/use-api"
 import { bookingService } from "@/services"
 import type { Booking } from "@/services/types"
+import type { PaginatedBookingsResponse } from "@/services/booking.service"
 
 const chartConfig = {
   bookings: { label: "Bookings", color: "hsl(185, 60%, 42%)" },
@@ -33,14 +34,16 @@ const chartConfig = {
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 
 export function CarrierBookingChart() {
-  const { data: bookings, loading } = useApi<Booking[]>(
-    () => bookingService.getBookings(),
+  const { data, loading } = useApi<PaginatedBookingsResponse>(
+    () => bookingService.getBookings({ limit: 200 }),
     [],
   )
 
+  const bookings = data?.bookings ?? []
+
   const weeklyData = useMemo(() => {
     const buckets = DAY_LABELS.map((day) => ({ day, bookings: 0 }))
-    if (!bookings) return []
+    if (!bookings.length) return []
     for (const b of bookings) {
       const dow = new Date(b.createdAt).getDay()
       buckets[dow].bookings++

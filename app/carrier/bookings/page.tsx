@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useEffect, useCallback } from "react"
 import {
   Search,
   Filter,
@@ -44,6 +44,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useApi } from "@/hooks/use-api"
 import { bookingService } from "@/services"
 import type { Booking, BookingStatus, CargoType } from "@/services/types"
+import type { PaginatedBookingsResponse } from "@/services/booking.service"
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -70,41 +71,59 @@ function cargoBadge(type: CargoType) {
   )
 }
 
-const ITEMS_PER_PAGE = 8
+const ITEMS_PER_PAGE = 10
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function CarrierBookingsPage() {
-  const { data: bookings, loading, error, refetch } = useApi<Booking[]>(
-    () => bookingService.getBookings(),
-    [],
-  )
-
   const [search, setSearch] = useState("")
+  const [debouncedSearch, setDebouncedSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [page, setPage] = useState(1)
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
 
-  const list = bookings ?? []
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search)
+      setPage(1)
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [search])
 
-  const filtered = useMemo(() => {
-    return list.filter((b) => {
-      const s = search.toLowerCase()
-      const matchesSearch =
-        search === "" ||
-        b.bookingNumber.toLowerCase().includes(s) ||
-        b.truck.plateNumber.toLowerCase().includes(s) ||
-        (b.containerNumber ?? "").toLowerCase().includes(s)
-      const matchesStatus = statusFilter === "all" || b.status === statusFilter
-      return matchesSearch && matchesStatus
-    })
-  }, [list, search, statusFilter])
+  const { data, loading, error, refetch } = useApi<PaginatedBookingsResponse>(
+    () => bookingService.getBookings({
+      page,
+      limit: ITEMS_PER_PAGE,
+      ...(statusFilter !== "all" && { status: statusFilter as BookingStatus }),
+      ...(debouncedSearch && { search: debouncedSearch }),
+    }),
+    [page, statusFilter, debouncedSearch],
+  )
 
-  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE)
-  const paged = filtered.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE)
+  const bookings = data?.bookings ?? []
+  const pagination = data?.pagination
+  const totalPages = pagination?.totalPages ?? 1
+  const totalCount = pagination?.totalCount ?? 0
   const hasFilters = search !== "" || statusFilter !== "all"
 
-  const clearFilters = () => { setSearch(""); setStatusFilter("all"); setPage(1) }
+  const clearFilters = () => { setSearch(""); setDebouncedSearch(""); setStatusFilter("all"); setPage(1) }
+
+  // Pagination range helper
+  const getPaginationRange = useCallback((): (number | "ellipsis")[] => {
+    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1)
+    const pages: (number | "ellipsis")[] = []
+    if (page <= 4) {
+      for (let i = 1; i <= 5; i++) pages.push(i)
+      pages.push("ellipsis", totalPages)
+    } else if (page >= totalPages - 3) {
+      pages.push(1, "ellipsis")
+      for (let i = totalPages - 4; i <= totalPages; i++) pages.push(i)
+    } else {
+      pages.push(1, "ellipsis", page - 1, page, page + 1, "ellipsis", totalPages)
+    }
+    return pages
+  }, [page, totalPages])
 
   if (error) {
     return (
@@ -123,7 +142,7 @@ export default function CarrierBookingsPage() {
         <div>
           <h1 className="font-heading text-2xl font-bold text-foreground">My Bookings</h1>
           <p className="text-sm text-muted-foreground">
-            {loading ? "\u2026" : `Active and recent booking requests (${filtered.length} total)`}
+            {loading ? "\u2026" : `Active and recent booking requests (${totalCount} total)`}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -142,7 +161,7 @@ export default function CarrierBookingsPage() {
           <div className="flex flex-col gap-3 md:flex-row md:items-center">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input placeholder="Search by ID, plate, or container..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1) }} className="h-9 bg-muted/50 pl-9 text-sm" />
+              <Input placeholder="Search by ID, plate, or container..." value={search} onChange={(e) => setSearch(e.target.value)} className="h-9 bg-muted/50 pl-9 text-sm" />
             </div>
             <div className="flex items-center gap-2">
               <Filter className="hidden h-4 w-4 text-muted-foreground md:block" />
@@ -193,14 +212,14 @@ export default function CarrierBookingsPage() {
                     ))}
                   </TableRow>
                 ))
-              ) : paged.length === 0 ? (
+              ) : bookings.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={8} className="py-12 text-center text-muted-foreground">
                     No bookings found matching your filters.
                   </TableCell>
                 </TableRow>
               ) : (
-                paged.map((b) => (
+                bookings.map((b) => (
                   <TableRow key={b.id} className="cursor-pointer" onClick={() => setSelectedBooking(b)}>
                     <TableCell className="pl-6 font-mono text-xs font-medium text-foreground">{b.bookingNumber}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">{b.terminal.name}</TableCell>
@@ -220,17 +239,21 @@ export default function CarrierBookingsPage() {
             </TableBody>
           </Table>
 
-          {totalPages > 1 && (
+          {!loading && totalPages > 1 && (
             <div className="flex items-center justify-between border-t border-border px-6 py-3">
               <p className="text-xs text-muted-foreground">
-                Showing {(page - 1) * ITEMS_PER_PAGE + 1}-{Math.min(page * ITEMS_PER_PAGE, filtered.length)} of {filtered.length}
+                Showing {(page - 1) * ITEMS_PER_PAGE + 1}-{Math.min(page * ITEMS_PER_PAGE, totalCount)} of {totalCount}
               </p>
               <div className="flex items-center gap-1">
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setPage(page - 1)} disabled={page === 1}><ChevronLeft className="h-4 w-4" /></Button>
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                  <Button key={p} variant={p === page ? "default" : "ghost"} size="icon" className="h-8 w-8 text-xs" onClick={() => setPage(p)}>{p}</Button>
-                ))}
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setPage(page + 1)} disabled={page === totalPages}><ChevronRight className="h-4 w-4" /></Button>
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setPage(page - 1)} disabled={!pagination?.hasPrevPage}><ChevronLeft className="h-4 w-4" /></Button>
+                {getPaginationRange().map((p, idx) =>
+                  p === "ellipsis" ? (
+                    <span key={`e-${idx}`} className="flex h-8 w-8 items-center justify-center text-xs text-muted-foreground">…</span>
+                  ) : (
+                    <Button key={p} variant={p === page ? "default" : "ghost"} size="icon" className="h-8 w-8 text-xs" onClick={() => setPage(p)}>{p}</Button>
+                  )
+                )}
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setPage(page + 1)} disabled={!pagination?.hasNextPage}><ChevronRight className="h-4 w-4" /></Button>
               </div>
             </div>
           )}

@@ -25,6 +25,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useApi } from "@/hooks/use-api"
 import { bookingService } from "@/services"
 import type { Booking } from "@/services/types"
+import type { PaginatedBookingsResponse } from "@/services/booking.service"
 
 const chartConfig = {
   confirmed: {
@@ -44,14 +45,16 @@ const chartConfig = {
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 
 export function BookingsChart() {
-  const { data: bookings, loading } = useApi<Booking[]>(
-    () => bookingService.getBookings(),
+  const { data, loading } = useApi<PaginatedBookingsResponse>(
+    () => bookingService.getBookings({ limit: 500 }),
     [],
   )
 
+  const bookings = data?.bookings ?? []
+
   /* Aggregate bookings by day-of-week */
   const weeklyData = useMemo(() => {
-    if (!bookings) return []
+    if (!bookings.length) return []
     const buckets = DAY_LABELS.map((day) => ({ day, confirmed: 0, pending: 0, rejected: 0 }))
     for (const b of bookings) {
       const dow = new Date(b.createdAt).getDay()

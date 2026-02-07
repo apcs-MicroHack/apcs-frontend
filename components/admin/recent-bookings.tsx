@@ -20,6 +20,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useApi } from "@/hooks/use-api"
 import { bookingService } from "@/services"
 import type { Booking, BookingStatus } from "@/services/types"
+import type { PaginatedBookingsResponse } from "@/services/booking.service"
 import Link from "next/link"
 
 const STATUS_CONFIG: Record<BookingStatus, { label: string; className: string }> = {
@@ -37,16 +38,12 @@ function StatusBadge({ status }: { status: BookingStatus }) {
 }
 
 export function RecentBookings() {
-  const { data: bookings, loading } = useApi<Booking[]>(
-    () => bookingService.getBookings(),
+  const { data, loading } = useApi<PaginatedBookingsResponse>(
+    () => bookingService.getBookings({ limit: 8 }),
     [],
   )
 
-  /* Show latest 8 bookings sorted by creation date */
-  const recent = (bookings ?? [])
-    .slice()
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .slice(0, 8)
+  const recent = data?.bookings ?? []
 
   return (
     <Card className="border-border bg-card">

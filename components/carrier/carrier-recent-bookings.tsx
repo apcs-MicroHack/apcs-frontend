@@ -23,6 +23,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useApi } from "@/hooks/use-api"
 import { bookingService } from "@/services"
 import type { Booking, BookingStatus } from "@/services/types"
+import type { PaginatedBookingsResponse } from "@/services/booking.service"
 
 const STATUS_STYLES: Record<BookingStatus, { bg: string; text: string; label: string }> = {
   PENDING:   { bg: "bg-[hsl(var(--warning))]/10",      text: "text-[hsl(var(--warning))]",      label: "Pending" },
@@ -39,15 +40,12 @@ function StatusBadge({ status }: { status: BookingStatus }) {
 }
 
 export function CarrierRecentBookings() {
-  const { data: bookings, loading } = useApi<Booking[]>(
-    () => bookingService.getBookings(),
+  const { data, loading } = useApi<PaginatedBookingsResponse>(
+    () => bookingService.getBookings({ limit: 5 }),
     [],
   )
 
-  const recent = (bookings ?? [])
-    .slice()
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .slice(0, 5)
+  const recent = data?.bookings ?? []
 
   return (
     <Card className="border-border bg-card">
