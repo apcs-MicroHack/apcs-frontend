@@ -33,10 +33,11 @@ export function OperatorQuickActions() {
   }, [])
 
   const { data: pendingData } = useApi<PaginatedBookingsResponse>(
-    () => terminalId ? bookingService.getBookings({ terminalId, status: "PENDING" }) : Promise.resolve(EMPTY_RESPONSE),
+    () => terminalId ? bookingService.getBookings({ terminalId, status: "PENDING", limit: 100 }) : Promise.resolve(EMPTY_RESPONSE),
     [terminalId],
   )
   const pending = pendingData?.bookings ?? []
+  const pendingCount = pendingData?.pagination?.totalCount ?? pending.length
   const { data: unread } = useApi<number>(
     () => notificationService.getUnreadCount(),
     [],
@@ -50,7 +51,7 @@ export function OperatorQuickActions() {
       icon: ClipboardCheck,
       iconBg: "bg-[hsl(var(--warning))]/10",
       iconColor: "text-[hsl(var(--warning))]",
-      badge: pending?.length ? String(pending.length) : undefined,
+      badge: pendingCount ? String(pendingCount) : undefined,
     },
     {
       label: "Capacity Settings",

@@ -38,10 +38,11 @@ export function LiveQueuePreview() {
   }, [])
 
   const { data, loading, refetch } = useApi<PaginatedBookingsResponse>(
-    () => terminalId ? bookingService.getBookings({ terminalId, status: "PENDING" }) : Promise.resolve(EMPTY_RESPONSE),
+    () => terminalId ? bookingService.getBookings({ terminalId, status: "PENDING", limit: 100 }) : Promise.resolve(EMPTY_RESPONSE),
     [terminalId],
   )
   const bookings = data?.bookings ?? []
+  const totalPending = data?.pagination?.totalCount ?? bookings.length
   const [processing, setProcessing] = useState<string | null>(null)
 
   const handleConfirm = async (id: string) => {

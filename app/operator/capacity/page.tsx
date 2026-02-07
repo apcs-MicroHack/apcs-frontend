@@ -221,7 +221,7 @@ export default function OperatorCapacityPage() {
     try {
       const [slotsRes, bookingsResponse] = await Promise.all([
         slotService.getAvailableSlots(selectedTerminalId, dateKey, dateKey),
-        bookingService.getBookings({ terminalId: selectedTerminalId, startDate: dateKey, endDate: dateKey }),
+        bookingService.getBookings({ terminalId: selectedTerminalId, startDate: dateKey, endDate: dateKey, limit: 100 }),
       ])
       const availRes = slotsRes as AvailabilityResponse
       const day = availRes.availability?.[0] ?? null

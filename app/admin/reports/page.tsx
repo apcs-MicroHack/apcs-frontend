@@ -121,8 +121,8 @@ export default function AdminReportsPage() {
     }),
     [dateRange.startDate, dateRange.endDate],
   )
-  const summary = summaryData?.summary ?? []
-  const totalInRange = summary.reduce((acc, s) => acc + s.count, 0)
+  const summaryItems = summaryData?.summary ?? []
+  const totalInRange = summaryItems.reduce((acc, s) => acc + s.count, 0)
 
   // Also fetch some bookings for trend charts (limited to 100)
   const { data, loading: bookingsLoading, error: bookingsError } = useApi<PaginatedBookingsResponse>(
@@ -159,19 +159,19 @@ export default function AdminReportsPage() {
   // Terminal usage (from summary for accurate counts)
   const terminalData = useMemo(() => {
     const map = new Map<string, number>()
-    for (const s of summary) {
+    for (const s of summaryItems) {
       const name = s.terminal?.name ?? "Unknown"
       map.set(name, (map.get(name) ?? 0) + s.count)
     }
     return Array.from(map.entries())
       .sort((a, b) => b[1] - a[1])
       .map(([terminal, count]) => ({ terminal, bookings: count }))
-  }, [summary])
+  }, [summaryItems])
 
   // Status distribution (from summary for accurate counts)
   const statusData = useMemo(() => {
     const map = new Map<BookingStatus, number>()
-    for (const s of summary) {
+    for (const s of summaryItems) {
       map.set(s.status, (map.get(s.status) ?? 0) + s.count)
     }
     return (Object.keys(STATUS_COLORS) as BookingStatus[])
@@ -219,13 +219,15 @@ export default function AdminReportsPage() {
       }))
   }, [bookings])
 
-  // Summary stats
+  // Summary stats (uses totalInRange from API summary for accurate totals)
   const summary = useMemo(() => {
-    const total = bookings.length
-    const rejected = bookings.filter((b) => b.status === "REJECTED").length
+    const total = totalInRange
+    const rejected = summaryItems
+      .filter((s) => s.status === "REJECTED")
+      .reduce((acc, s) => acc + s.count, 0)
     const rejectionRate = total > 0 ? ((rejected / total) * 100).toFixed(1) : "0.0"
 
-    // Peak hour
+    // Peak hour (from sample bookings)
     let peakHour = "—"
     let peakCount = 0
     const hourMap = new Map<number, number>()
@@ -243,8 +245,8 @@ export default function AdminReportsPage() {
       }
     }
 
-    // Unique terminals
-    const terminals = new Set(bookings.map((b) => b.terminal?.name)).size
+    // Unique terminals (from summary for accuracy)
+    const terminals = new Set(summaryItems.map((s) => s.terminal?.name).filter(Boolean)).size
 
     return {
       total: total.toLocaleString(),
@@ -253,7 +255,7 @@ export default function AdminReportsPage() {
       peakCount,
       terminals,
     }
-  }, [bookings])
+  }, [totalInRange, summaryItems, bookings])
 
   // ── Export CSV ───────────────────────────────────────────────
   const handleExport = useCallback(() => {
