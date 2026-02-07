@@ -15,6 +15,8 @@ import {
   Container,
   RefreshCw,
   AlertCircle,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react"
 import { toast } from "sonner"
 import { Input } from "@/components/ui/input"
@@ -48,6 +50,7 @@ import type { PaginatedBookingsResponse } from "@/services/booking.service"
 import type { Booking, CargoType } from "@/services/types"
 
 const EMPTY_RESPONSE: PaginatedBookingsResponse = { bookings: [], pagination: { page: 1, limit: 10, totalCount: 0, totalPages: 0, hasNextPage: false, hasPrevPage: false } }
+const ITEMS_PER_PAGE = 10
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -76,6 +79,15 @@ function cargoColor(t: CargoType) {
 
 export default function OperatorQueuePage() {
   const [terminalId, setTerminalId] = useState<string | null>(null)
+  const [page, setPage] = useState(1)
+  const [search, setSearch] = useState("")
+  const [debouncedSearch, setDebouncedSearch] = useState("")
+  const [typeFilter, setTypeFilter] = useState("all")
+  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
+  const [rejectDialogOpen, setRejectDialogOpen] = useState(false)
+  const [rejectTarget, setRejectTarget] = useState<Booking | null>(null)
+  const [rejectReason, setRejectReason] = useState("")
+  const [processing, setProcessing] = useState(false)
 
   // Get operator's assigned terminal
   useEffect(() => {
@@ -84,39 +96,43 @@ export default function OperatorQueuePage() {
     })
   }, [])
 
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search)
+      setPage(1)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [search])
+
+  // Server-side paginated bookings
   const { data, loading, error, refetch } = useApi<PaginatedBookingsResponse>(
-    () => terminalId ? bookingService.getBookings({ terminalId, status: "PENDING", limit: 100 }) : Promise.resolve(EMPTY_RESPONSE),
-    [terminalId],
+    () => terminalId
+      ? bookingService.getBookings({
+          terminalId,
+          status: "PENDING",
+          page,
+          limit: ITEMS_PER_PAGE,
+          ...(debouncedSearch && { search: debouncedSearch }),
+        })
+      : Promise.resolve(EMPTY_RESPONSE),
+    [terminalId, page, debouncedSearch],
   )
   const bookings = data?.bookings ?? []
-  const totalPending = data?.pagination?.totalCount ?? bookings.length
+  const pagination = data?.pagination
+  const totalPending = pagination?.totalCount ?? 0
+  const totalPages = pagination?.totalPages ?? 1
 
-  const [search, setSearch] = useState("")
-  const [typeFilter, setTypeFilter] = useState("all")
-  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
-  const [rejectDialogOpen, setRejectDialogOpen] = useState(false)
-  const [rejectTarget, setRejectTarget] = useState<Booking | null>(null)
-  const [rejectReason, setRejectReason] = useState("")
-  const [processing, setProcessing] = useState(false)
-
-  const queue = bookings
-
+  // Client filter for cargo type only (search is now server-side)
   const filtered = useMemo(() => {
-    return queue.filter((b) => {
-      const s = search.toLowerCase()
-      const matchesSearch =
-        search === "" ||
-        b.bookingNumber.toLowerCase().includes(s) ||
-        b.carrier.companyName.toLowerCase().includes(s) ||
-        b.truck.plateNumber.toLowerCase().includes(s) ||
-        (b.containerNumber ?? "").toLowerCase().includes(s)
+    return bookings.filter((b) => {
       const matchesType = typeFilter === "all" || b.cargoType === typeFilter
-      return matchesSearch && matchesType
+      return matchesType
     })
-  }, [queue, search, typeFilter])
+  }, [bookings, typeFilter])
 
   // Count those waiting > 30 min
-  const urgentCount = queue.filter((b) => Date.now() - new Date(b.createdAt).getTime() > 30 * 60_000).length
+  const urgentCount = bookings.filter((b) => Date.now() - new Date(b.createdAt).getTime() > 30 * 60_000).length
   const hasFilters = search !== "" || typeFilter !== "all"
 
   const handleApprove = async (id: string) => {
@@ -158,7 +174,7 @@ export default function OperatorQueuePage() {
     }
   }
 
-  const clearFilters = () => { setSearch(""); setTypeFilter("all") }
+  const clearFilters = () => { setSearch(""); setTypeFilter("all"); setPage(1) }
 
   if (error) {
     return (
@@ -339,6 +355,36 @@ export default function OperatorQueuePage() {
           })
         )}
       </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-muted-foreground">
+            Page {page} of {totalPages} ({totalPending} total)
+          </p>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              disabled={page <= 1}
+              onClick={() => setPage(page - 1)}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="px-3 text-xs text-muted-foreground">{page} / {totalPages}</span>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              disabled={page >= totalPages}
+              onClick={() => setPage(page + 1)}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Detail Dialog */}
       <Dialog open={!!selectedBooking} onOpenChange={() => setSelectedBooking(null)}>

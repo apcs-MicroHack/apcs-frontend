@@ -6,12 +6,8 @@ import {
   RefreshCw,
   AlertCircle,
   BarChart3,
-  TrendingUp,
-  Truck,
 } from "lucide-react"
-import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Label } from "@/components/ui/label"
 import {
   Card,
   CardContent,
@@ -28,8 +24,7 @@ import {
 } from "@/components/ui/popover"
 import { useApi } from "@/hooks/use-api"
 import { bookingService } from "@/services"
-import type { PaginatedBookingsResponse, BookingSummaryResponse } from "@/services/booking.service"
-import type { Booking } from "@/services/types"
+import type { BookingSummaryResponse } from "@/services/booking.service"
 import {
   ResponsiveContainer,
   BarChart,
@@ -82,38 +77,12 @@ export default function CarrierReportsPage() {
   const [endDate, setEndDate] = useState(() => formatDateStr(new Date()))
 
   // Fetch summary for accurate counts by status/terminal
-  const { data: summaryData, loading: summaryLoading, refetch: refetchSummary } = useApi<BookingSummaryResponse>(
+  const { data: summaryData, loading, error, refetch } = useApi<BookingSummaryResponse>(
     () => bookingService.getBookingSummary({ startDate, endDate }),
     [startDate, endDate],
   )
   const summaryItems = summaryData?.summary ?? []
   const totalInRange = summaryItems.reduce((acc, s) => acc + s.count, 0)
-
-  // Fetch some bookings for trend charts (limited to 100)
-  const { data, loading: bookingsLoading, error } = useApi<PaginatedBookingsResponse>(
-    () => bookingService.getBookings({ startDate, endDate, limit: 100 }),
-    [startDate, endDate],
-  )
-  const bookings = data?.bookings ?? []
-  const loading = summaryLoading || bookingsLoading
-  const refetch = refetchSummary
-
-  // Monthly trend (group by week)
-  const weeklyData = useMemo(() => {
-    if (!bookings.length) return []
-    const weeks: Record<string, { week: string; total: number; completed: number; rejected: number }> = {}
-    bookings.forEach((b) => {
-      const d = new Date(b.createdAt ?? b.timeSlot?.date ?? Date.now())
-      const weekStart = new Date(d)
-      weekStart.setDate(d.getDate() - d.getDay())
-      const key = weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" })
-      if (!weeks[key]) weeks[key] = { week: key, total: 0, completed: 0, rejected: 0 }
-      weeks[key].total++
-      if (b.status === "CONSUMED" || b.status === "CONFIRMED") weeks[key].completed++
-      if (b.status === "REJECTED") weeks[key].rejected++
-    })
-    return Object.values(weeks).slice(-8)
-  }, [bookings])
 
   // Status distribution (from summary for accurate counts)
   const statusData = useMemo(() => {
@@ -141,28 +110,18 @@ export default function CarrierReportsPage() {
       .slice(0, 5)
   }, [summaryItems])
 
-  // Top trucks
-  const truckData = useMemo(() => {
-    if (!bookings?.length) return []
-    const counts: Record<string, number> = {}
-    bookings.forEach((b) => {
-      const plate = b.truck?.plateNumber ?? "Unknown"
-      counts[plate] = (counts[plate] ?? 0) + 1
-    })
-    return Object.entries(counts)
-      .map(([plate, count]) => ({ plate, bookings: count }))
-      .sort((a, b) => b.bookings - a.bookings)
-      .slice(0, 5)
-  }, [bookings])
-
   // Summary stats (from summary for accurate counts)
   const summary = useMemo(() => {
     const total = totalInRange
     const completed = summaryItems
       .filter((s) => s.status === "CONSUMED")
       .reduce((acc, s) => acc + s.count, 0)
+    const confirmed = summaryItems
+      .filter((s) => s.status === "CONFIRMED")
+      .reduce((acc, s) => acc + s.count, 0)
     const rate = total > 0 ? Math.round((completed / total) * 100) : 0
-    return { total, completed, rate }
+    const confirmRate = total > 0 ? Math.round((confirmed / total) * 100) : 0
+    return { total, completed, rate, confirmRate }
   }, [summaryItems, totalInRange])
 
   if (loading) {
@@ -173,7 +132,7 @@ export default function CarrierReportsPage() {
           {[1, 2, 3].map((i) => <Skeleton key={i} className="h-24 w-full rounded-xl" />)}
         </div>
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-72 w-full rounded-xl" />)}
+          {[1, 2].map((i) => <Skeleton key={i} className="h-72 w-full rounded-xl" />)}
         </div>
       </div>
     )
@@ -261,32 +220,6 @@ export default function CarrierReportsPage() {
 
       {/* Charts */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* Weekly Trend */}
-        <Card className="border-border bg-card">
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-sm font-semibold">
-              <TrendingUp className="h-4 w-4 text-[hsl(210,65%,45%)]" /> Booking Trend
-            </CardTitle>
-            <CardDescription className="text-xs">Weekly booking volume</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {weeklyData.length === 0 ? (
-              <p className="py-10 text-center text-xs text-muted-foreground">No data for selected period</p>
-            ) : (
-              <ResponsiveContainer width="100%" height={240}>
-                <BarChart data={weeklyData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="week" tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
-                  <YAxis tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
-                  <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid hsl(var(--border))" }} />
-                  <Bar dataKey="completed" fill="#10b981" radius={[4, 4, 0, 0]} name="Completed" />
-                  <Bar dataKey="rejected" fill="#ef4444" radius={[4, 4, 0, 0]} name="Rejected" />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
-
         {/* Status Breakdown */}
         <Card className="border-border bg-card">
           <CardHeader className="pb-2">
@@ -333,39 +266,6 @@ export default function CarrierReportsPage() {
                   <Bar dataKey="bookings" fill="hsl(210,65%,45%)" radius={[0, 4, 4, 0]} />
                 </BarChart>
               </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Top Trucks */}
-        <Card className="border-border bg-card">
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-sm font-semibold">
-              <Truck className="h-4 w-4 text-emerald-500" /> Top Trucks
-            </CardTitle>
-            <CardDescription className="text-xs">Most active vehicles</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {truckData.length === 0 ? (
-              <p className="py-10 text-center text-xs text-muted-foreground">No data</p>
-            ) : (
-              <div className="flex flex-col gap-3">
-                {truckData.map((t, idx) => (
-                  <div key={t.plate} className="flex items-center gap-3">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-muted text-xs font-bold text-foreground">{idx + 1}</span>
-                    <div className="flex-1">
-                      <p className="font-mono text-xs font-semibold text-foreground">{t.plate}</p>
-                      <div className="mt-1 h-1.5 w-full rounded-full bg-muted overflow-hidden">
-                        <div
-                          className="h-full rounded-full bg-emerald-500"
-                          style={{ width: `${(t.bookings / truckData[0].bookings) * 100}%` }}
-                        />
-                      </div>
-                    </div>
-                    <span className="text-xs font-medium text-muted-foreground">{t.bookings}</span>
-                  </div>
-                ))}
-              </div>
             )}
           </CardContent>
         </Card>
