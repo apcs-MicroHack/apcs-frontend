@@ -16,7 +16,7 @@ import {
   Loader2,
   FileText,
 } from "lucide-react"
-import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
@@ -177,19 +177,19 @@ function ChatBubble({ message }: { message: ChatMessage }) {
       </div>
       <div className={cn(
         "flex flex-col gap-1 min-w-0",
-        isUser ? "items-end max-w-[75%]" : "items-start max-w-[85%]",
+        isUser ? "items-end max-w-[75%]" : "items-start max-w-[90%]",
       )}>
         <div
           className={cn(
-            "rounded-xl px-4 py-2.5 text-sm leading-relaxed min-w-0",
+            "rounded-2xl px-5 py-3 text-sm leading-relaxed min-w-0",
             isUser
-              ? "rounded-tr-sm bg-primary text-primary-foreground whitespace-pre-wrap"
-              : "rounded-tl-sm border border-border bg-card text-foreground w-full overflow-hidden",
+              ? "rounded-tr-sm bg-primary text-primary-foreground whitespace-pre-wrap shadow-sm"
+              : "rounded-tl-sm border border-border bg-card text-foreground w-full overflow-hidden shadow-sm",
           )}
         >
           {isUser ? message.text : <AIMessageContent content={message.text} uiPayload={message.uiPayload} />}
         </div>
-        <span className="text-[10px] text-muted-foreground">{message.timestamp}</span>
+        <span className="text-[10px] text-muted-foreground px-1">{message.timestamp}</span>
       </div>
     </div>
   )
@@ -467,35 +467,36 @@ export default function ChatPage() {
         <div className="flex-1 overflow-y-auto">
           {messages.length === 0 && !activeSessionId ? (
             <div className="flex h-full flex-col items-center justify-center px-6">
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[hsl(185,60%,42%)]/10">
-                <Anchor className="h-8 w-8 text-[hsl(185,60%,42%)]" />
+              <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-[hsl(185,60%,42%)]/20 to-[hsl(210,65%,45%)]/20 shadow-lg">
+                <Anchor className="h-10 w-10 text-[hsl(185,60%,42%)]" />
               </div>
-              <h3 className="mt-6 font-heading text-xl font-bold text-foreground">
+              <h3 className="mt-6 font-heading text-2xl font-bold text-foreground">
                 APCS AI Assistant
               </h3>
-              <p className="mt-2 max-w-md text-center text-sm text-muted-foreground">
+              <p className="mt-3 max-w-lg text-center text-sm leading-relaxed text-muted-foreground">
                 Ask me about bookings, terminal availability, fleet status, capacity, or anything related to your port operations.
               </p>
-              <div className="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="mt-10 grid grid-cols-1 gap-3 sm:grid-cols-2 max-w-xl w-full">
                 {[
-                  "Show me my pending bookings",
-                  "What terminals are available tomorrow?",
-                  "Give me a fleet status summary",
-                  "What can you help me with?",
+                  { text: "Show me my pending bookings", icon: "📋" },
+                  { text: "What terminals are available tomorrow?", icon: "🏗️" },
+                  { text: "Give me a fleet status summary", icon: "🚚" },
+                  { text: "What can you help me with?", icon: "💡" },
                 ].map((suggestion) => (
                   <button
-                    key={suggestion}
-                    onClick={() => setInputValue(suggestion)}
-                    className="rounded-lg border border-border bg-card px-4 py-3 text-left text-sm text-foreground transition-colors hover:bg-muted/50"
+                    key={suggestion.text}
+                    onClick={() => setInputValue(suggestion.text)}
+                    className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3.5 text-left text-sm text-foreground transition-all hover:bg-muted/50 hover:border-primary/30 hover:shadow-sm"
                   >
-                    {suggestion}
+                    <span className="text-lg">{suggestion.icon}</span>
+                    <span>{suggestion.text}</span>
                   </button>
                 ))}
               </div>
             </div>
           ) : (
-            <div className="mx-auto max-w-4xl px-4 sm:px-6 py-6">
-              <div className="flex flex-col gap-6">
+            <div className="mx-auto max-w-4xl px-4 sm:px-6 py-8">
+              <div className="flex flex-col gap-5">
                 {messages.map((msg) => (
                   <ChatBubble key={msg.id} message={msg} />
                 ))}
@@ -516,30 +517,38 @@ export default function ChatPage() {
         </div>
 
         {/* Input */}
-        <div className="shrink-0 border-t border-border bg-background p-4">
-          <div className="mx-auto max-w-3xl">
+        <div className="shrink-0 border-t border-border bg-background/80 backdrop-blur-sm p-4">
+          <div className="mx-auto max-w-4xl">
             <form
               onSubmit={(e) => { e.preventDefault(); handleSend() }}
-              className="flex items-center gap-3"
+              className="relative flex items-end gap-3 rounded-2xl border border-border bg-card p-2 shadow-sm focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/20 transition-all"
             >
-              <Input
+              <Textarea
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault()
+                    handleSend()
+                  }
+                }}
                 placeholder="Ask about bookings, availability, fleet status..."
-                className="h-11 flex-1 bg-muted/50 text-sm"
+                className="min-h-[44px] max-h-[160px] flex-1 resize-none border-0 bg-transparent text-sm shadow-none focus-visible:ring-0 placeholder:text-muted-foreground/60"
+                rows={1}
                 disabled={isLoading}
               />
               <Button
                 type="submit"
                 disabled={!inputValue.trim() || isLoading}
-                className="h-11 w-11 shrink-0 p-0"
+                size="icon"
+                className="h-10 w-10 shrink-0 rounded-xl"
                 aria-label="Send message"
               >
-                <Send className="h-4 w-4" />
+                {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               </Button>
             </form>
             <p className="mt-2 text-center text-[10px] text-muted-foreground">
-              APCS AI provides information based on your account data. Verify critical details with the operator.
+              Press Enter to send, Shift+Enter for new line. APCS AI provides information based on your account data.
             </p>
           </div>
         </div>

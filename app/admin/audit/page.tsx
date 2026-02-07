@@ -5,15 +5,18 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Input } from "@/components/ui/input"
 import { Calendar } from "@/components/ui/calendar"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent } from "@/components/ui/dropdown-menu"
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { AlertCircle, ChevronLeft, ChevronRight, Search, Eye, Filter } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { AlertCircle, ChevronLeft, ChevronRight, Search, Eye, Filter, CalendarIcon, X, RotateCcw } from "lucide-react"
 import { getAuditLogs } from "@/services/audit.service"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { DropdownMenuCheckboxItem } from "@/components/ui/dropdown-menu"
 import { getUserById } from "@/services/user.service"
+import { cn } from "@/lib/utils"
 
 const ACTION_COLORS: Record<string, string> = {
   CREATE: "bg-green-100 text-green-800 border-green-200",
@@ -45,7 +48,10 @@ export default function AdminAuditPage() {
   const [dateRange, setDateRange] = useState<{ from: Date | undefined, to: Date | undefined }>({ from: undefined, to: undefined })
   const [showColumns, setShowColumns] = useState([...DEFAULT_COLUMNS])
   const [showExtra, setShowExtra] = useState(false)
+  const [calendarOpen, setCalendarOpen] = useState(false)
   const [userDialog, setUserDialog] = useState<{ open: boolean, user: any | null, loading: boolean }>({ open: false, user: null, loading: false })
+
+  const activeFilterCount = [search, actionFilter !== "all" ? actionFilter : "", entityFilter !== "all" ? entityFilter : "", dateRange.from].filter(Boolean).length
 
   // Create a stable string key for dateRange to avoid dependency array size/order issues
   const dateRangeKey = `${dateRange.from ? dateRange.from.toISOString().slice(0,10) : ''}|${dateRange.to ? dateRange.to.toISOString().slice(0,10) : ''}`;
@@ -183,8 +189,8 @@ export default function AdminAuditPage() {
       </div>
       {/* Filters */}
       <Card className="border-border bg-card">
-        <CardContent className="p-4 flex flex-col gap-4 md:flex-row md:items-end md:gap-6">
-          <div className="flex flex-col gap-2 w-full md:w-1/4">
+        <CardContent className="p-4 flex flex-col gap-4 md:flex-row md:items-end md:gap-4 md:flex-wrap">
+          <div className="flex flex-col gap-1.5 w-full md:w-auto md:min-w-[220px] md:flex-1">
             <label className="text-xs font-medium text-muted-foreground">Search</label>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -196,7 +202,7 @@ export default function AdminAuditPage() {
               />
             </div>
           </div>
-          <div className="flex flex-col gap-2 w-full md:w-1/5">
+          <div className="flex flex-col gap-1.5 w-full md:w-auto md:min-w-[160px]">
             <label className="text-xs font-medium text-muted-foreground">Action</label>
             <Select value={actionFilter} onValueChange={v => { setActionFilter(v); setPage(1) }}>
               <SelectTrigger className="h-9 text-sm">
@@ -219,7 +225,7 @@ export default function AdminAuditPage() {
               </SelectContent>
             </Select>
           </div>
-          <div className="flex flex-col gap-2 w-full md:w-1/5">
+          <div className="flex flex-col gap-1.5 w-full md:w-auto md:min-w-[160px]">
             <label className="text-xs font-medium text-muted-foreground">Entity</label>
             <Select value={entityFilter} onValueChange={v => { setEntityFilter(v); setPage(1) }}>
               <SelectTrigger className="h-9 text-sm">
@@ -233,36 +239,83 @@ export default function AdminAuditPage() {
                 <SelectItem value="TERMINAL">Terminal</SelectItem>
                 <SelectItem value="NOTIFICATION">Notification</SelectItem>
                 <SelectItem value="REPORT">Report</SelectItem>
-                {/* Add more as needed */}
               </SelectContent>
             </Select>
           </div>
-          <div className="flex flex-col gap-2 w-full md:w-1/4 min-w-[180px]">
+          <div className="flex flex-col gap-1.5 w-full md:w-auto md:min-w-[240px]">
             <label className="text-xs font-medium text-muted-foreground">Date Range</label>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="justify-between w-full h-9 text-left font-normal">
+            <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className={cn("justify-start gap-2 w-full h-9 text-left font-normal", !dateRange.from && "text-muted-foreground")}>
+                  <CalendarIcon className="h-4 w-4 shrink-0" />
                   {dateRange.from && dateRange.to
-                    ? `${dateRange.from.toLocaleDateString()} - ${dateRange.to.toLocaleDateString()}`
+                    ? `${dateRange.from.toLocaleDateString()} – ${dateRange.to.toLocaleDateString()}`
                     : dateRange.from
                     ? dateRange.from.toLocaleDateString()
                     : "Pick a date range"}
+                  {dateRange.from && (
+                    <X
+                      className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground hover:text-foreground"
+                      onClick={(e) => { e.stopPropagation(); setDateRange({ from: undefined, to: undefined }); setPage(1) }}
+                    />
+                  )}
                 </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="p-0 mt-2">
-                <Calendar
-                  mode="range"
-                  selected={dateRange}
-                  onSelect={(range) => setDateRange(range ?? { from: undefined, to: undefined })}
-                  className="rounded-md border bg-background shadow-sm"
-                  numberOfMonths={1}
-                />
-              </DropdownMenuContent>
-            </DropdownMenu>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start" sideOffset={8}>
+                <div className="flex">
+                  <div className="border-r border-border p-3 flex flex-col gap-1">
+                    <p className="text-xs font-medium text-muted-foreground mb-2 px-2">Quick select</p>
+                    {[
+                      { label: "Today", days: 0 },
+                      { label: "Last 7 days", days: 7 },
+                      { label: "Last 30 days", days: 30 },
+                      { label: "Last 90 days", days: 90 },
+                    ].map((preset) => (
+                      <Button
+                        key={preset.label}
+                        variant="ghost"
+                        size="sm"
+                        className="justify-start text-xs h-8 px-2"
+                        onClick={() => {
+                          const to = new Date()
+                          const from = new Date()
+                          from.setDate(from.getDate() - preset.days)
+                          setDateRange({ from, to })
+                          setPage(1)
+                          setCalendarOpen(false)
+                        }}
+                      >
+                        {preset.label}
+                      </Button>
+                    ))}
+                  </div>
+                  <Calendar
+                    mode="range"
+                    selected={dateRange}
+                    onSelect={(range) => {
+                      setDateRange(range ?? { from: undefined, to: undefined })
+                      if (range?.from && range?.to) {
+                        setPage(1)
+                        setCalendarOpen(false)
+                      }
+                    }}
+                    className="rounded-md"
+                    numberOfMonths={2}
+                  />
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
-          <div className="flex flex-col gap-2 md:justify-end">
-            <Button variant="ghost" size="sm" className="h-9 gap-1 text-xs mt-6" onClick={() => { setSearch(""); setActionFilter("all"); setEntityFilter("all"); setDateRange({ from: undefined, to: undefined }); setPage(1); }}>
-              Clear Filters
+          <div className="flex items-end">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-9 gap-1.5 text-xs"
+              onClick={() => { setSearch(""); setActionFilter("all"); setEntityFilter("all"); setDateRange({ from: undefined, to: undefined }); setPage(1); }}
+              disabled={activeFilterCount === 0}
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              Reset{activeFilterCount > 0 && ` (${activeFilterCount})`}
             </Button>
           </div>
         </CardContent>
@@ -320,28 +373,30 @@ export default function AdminAuditPage() {
           {/* Pagination */}
           {!loading && totalPages > 1 && (
             <div className="flex items-center justify-between border-t border-border px-6 py-3">
-              <p className="text-xs text-muted-foreground">
-                Page {page} of {totalPages}
+              <p className="text-sm text-muted-foreground">
+                Page <span className="font-medium text-foreground">{page}</span> of <span className="font-medium text-foreground">{totalPages}</span>
               </p>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-2">
                 <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 gap-1 text-xs"
                   onClick={() => setPage(page - 1)}
                   disabled={page === 1}
                   aria-label="Previous page"
                 >
                   <ChevronLeft className="h-4 w-4" />
+                  Previous
                 </Button>
                 <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 gap-1 text-xs"
                   onClick={() => setPage(page + 1)}
                   disabled={page === totalPages}
                   aria-label="Next page"
                 >
+                  Next
                   <ChevronRight className="h-4 w-4" />
                 </Button>
               </div>
