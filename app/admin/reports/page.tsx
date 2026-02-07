@@ -41,7 +41,7 @@ import { PageTransition } from "@/components/ui/page-transition"
 import { AutoRefresh } from "@/components/ui/auto-refresh"
 import { useApi } from "@/hooks/use-api"
 import { bookingService } from "@/services"
-import type { PaginatedBookingsResponse } from "@/services/booking.service"
+import type { PaginatedBookingsResponse, BookingSummaryResponse } from "@/services/booking.service"
 import type { Booking, BookingStatus } from "@/services/types"
 
 // ── Status color map ─────────────────────────────────────────
@@ -113,8 +113,19 @@ export default function AdminReportsPage() {
   const [range, setRange] = useState<RangeKey>("30d")
   const dateRange = useMemo(() => getDateRange(range), [range])
 
-  // Fetch bookings with date filter (backend caps at 100 per request)
-  const { data, loading, error, refetch } = useApi<PaginatedBookingsResponse>(
+  // Fetch summary for accurate counts by status/terminal (supports date filters)
+  const { data: summaryData, loading: summaryLoading, error: summaryError, refetch: refetchSummary } = useApi<BookingSummaryResponse>(
+    () => bookingService.getBookingSummary({ 
+      startDate: dateRange.startDate, 
+      endDate: dateRange.endDate,
+    }),
+    [dateRange.startDate, dateRange.endDate],
+  )
+  const summary = summaryData?.summary ?? []
+  const totalInRange = summary.reduce((acc, s) => acc + s.count, 0)
+
+  // Also fetch some bookings for trend charts (limited to 100)
+  const { data, loading: bookingsLoading, error: bookingsError } = useApi<PaginatedBookingsResponse>(
     () => bookingService.getBookings({ 
       startDate: dateRange.startDate, 
       endDate: dateRange.endDate,
@@ -123,9 +134,12 @@ export default function AdminReportsPage() {
     [dateRange.startDate, dateRange.endDate],
   )
   const bookings = data?.bookings ?? []
-  const totalInRange = data?.pagination?.totalCount ?? bookings.length
+  
+  const loading = summaryLoading || bookingsLoading
+  const error = summaryError || bookingsError
+  const refetch = useCallback(() => { refetchSummary() }, [refetchSummary])
 
-  // Monthly trend: group by YYYY-MM
+  // Monthly trend: group by YYYY-MM (from sample bookings)
   const monthlyData = useMemo(() => {
     const map = new Map<string, number>()
     for (const b of bookings) {
@@ -142,23 +156,23 @@ export default function AdminReportsPage() {
       })
   }, [bookings])
 
-  // Terminal usage
+  // Terminal usage (from summary for accurate counts)
   const terminalData = useMemo(() => {
     const map = new Map<string, number>()
-    for (const b of bookings) {
-      const name = b.terminal?.name ?? "Unknown"
-      map.set(name, (map.get(name) ?? 0) + 1)
+    for (const s of summary) {
+      const name = s.terminal?.name ?? "Unknown"
+      map.set(name, (map.get(name) ?? 0) + s.count)
     }
     return Array.from(map.entries())
       .sort((a, b) => b[1] - a[1])
       .map(([terminal, count]) => ({ terminal, bookings: count }))
-  }, [bookings])
+  }, [summary])
 
-  // Status distribution
+  // Status distribution (from summary for accurate counts)
   const statusData = useMemo(() => {
     const map = new Map<BookingStatus, number>()
-    for (const b of bookings) {
-      map.set(b.status, (map.get(b.status) ?? 0) + 1)
+    for (const s of summary) {
+      map.set(s.status, (map.get(s.status) ?? 0) + s.count)
     }
     return (Object.keys(STATUS_COLORS) as BookingStatus[])
       .map((status) => ({
@@ -168,7 +182,7 @@ export default function AdminReportsPage() {
         color: STATUS_COLORS[status],
       }))
       .filter((d) => d.value > 0)
-  }, [bookings])
+  }, [summary])
 
   // Hourly distribution (from timeSlot.startTime)
   const hourlyData = useMemo(() => {

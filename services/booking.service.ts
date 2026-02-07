@@ -76,8 +76,20 @@ export async function getBookings(
 
 // ── Booking summary ──────────────────────────────────────────
 
-export async function getBookingSummary(): Promise<BookingSummaryResponse> {
-  const { data } = await api.get("/bookings/summary")
+export interface BookingSummaryFilters {
+  startDate?: string
+  endDate?: string
+  terminalId?: string
+}
+
+export async function getBookingSummary(
+  filters?: BookingSummaryFilters,
+): Promise<BookingSummaryResponse> {
+  const params: Record<string, string> = {}
+  if (filters?.startDate) params.startDate = filters.startDate
+  if (filters?.endDate) params.endDate = filters.endDate
+  if (filters?.terminalId) params.terminalId = filters.terminalId
+  const { data } = await api.get("/bookings/summary", { params })
   return data
 }
 

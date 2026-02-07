@@ -28,8 +28,7 @@ import {
 } from "@/components/ui/popover"
 import { useApi } from "@/hooks/use-api"
 import { bookingService } from "@/services"
-import type { PaginatedBookingsResponse } from "@/services/booking.service"
-import type { PaginatedBookingsResponse } from "@/services/booking.service"
+import type { PaginatedBookingsResponse, BookingSummaryResponse } from "@/services/booking.service"
 import type { Booking } from "@/services/types"
 import {
   ResponsiveContainer,
@@ -82,13 +81,22 @@ export default function CarrierReportsPage() {
   })
   const [endDate, setEndDate] = useState(() => formatDateStr(new Date()))
 
-  // Fetch bookings with date filter (backend caps at 100 per request)
-  const { data, loading, error, refetch } = useApi<PaginatedBookingsResponse>(
+  // Fetch summary for accurate counts by status/terminal
+  const { data: summaryData, loading: summaryLoading, refetch: refetchSummary } = useApi<BookingSummaryResponse>(
+    () => bookingService.getBookingSummary({ startDate, endDate }),
+    [startDate, endDate],
+  )
+  const summaryItems = summaryData?.summary ?? []
+  const totalInRange = summaryItems.reduce((acc, s) => acc + s.count, 0)
+
+  // Fetch some bookings for trend charts (limited to 100)
+  const { data, loading: bookingsLoading, error } = useApi<PaginatedBookingsResponse>(
     () => bookingService.getBookings({ startDate, endDate, limit: 100 }),
     [startDate, endDate],
   )
   const bookings = data?.bookings ?? []
-  const totalInRange = data?.pagination?.totalCount ?? bookings.length
+  const loading = summaryLoading || bookingsLoading
+  const refetch = refetchSummary
 
   // Monthly trend (group by week)
   const weeklyData = useMemo(() => {
@@ -107,31 +115,31 @@ export default function CarrierReportsPage() {
     return Object.values(weeks).slice(-8)
   }, [bookings])
 
-  // Status distribution
+  // Status distribution (from summary for accurate counts)
   const statusData = useMemo(() => {
-    if (!bookings?.length) return []
+    if (!summaryItems.length) return []
     const counts: Record<string, number> = {}
-    bookings.forEach((b) => { counts[b.status] = (counts[b.status] ?? 0) + 1 })
+    summaryItems.forEach((s) => { counts[s.status] = (counts[s.status] ?? 0) + s.count })
     return Object.entries(counts).map(([status, count]) => ({
       name: status.charAt(0) + status.slice(1).toLowerCase(),
       value: count,
       color: STATUS_COLORS[status] ?? "#6b7280",
     }))
-  }, [bookings])
+  }, [summaryItems])
 
-  // Terminal usage
+  // Terminal usage (from summary for accurate counts)
   const terminalData = useMemo(() => {
-    if (!bookings?.length) return []
+    if (!summaryItems.length) return []
     const counts: Record<string, number> = {}
-    bookings.forEach((b) => {
-      const name = b.terminal?.name ?? "Unknown"
-      counts[name] = (counts[name] ?? 0) + 1
+    summaryItems.forEach((s) => {
+      const name = s.terminal?.name ?? "Unknown"
+      counts[name] = (counts[name] ?? 0) + s.count
     })
     return Object.entries(counts)
       .map(([terminal, count]) => ({ terminal, bookings: count }))
       .sort((a, b) => b.bookings - a.bookings)
       .slice(0, 5)
-  }, [bookings])
+  }, [summaryItems])
 
   // Top trucks
   const truckData = useMemo(() => {
@@ -147,13 +155,15 @@ export default function CarrierReportsPage() {
       .slice(0, 5)
   }, [bookings])
 
-  // Summary stats
+  // Summary stats (from summary for accurate counts)
   const summary = useMemo(() => {
     const total = totalInRange
-    const completed = bookings.filter((b) => b.status === "CONSUMED").length
+    const completed = summaryItems
+      .filter((s) => s.status === "CONSUMED")
+      .reduce((acc, s) => acc + s.count, 0)
     const rate = total > 0 ? Math.round((completed / total) * 100) : 0
     return { total, completed, rate }
-  }, [bookings, totalInRange])
+  }, [summaryItems, totalInRange])
 
   if (loading) {
     return (
