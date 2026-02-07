@@ -210,7 +210,7 @@ export default function OperatorQueuePage() {
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
         <StatCard loading={loading} value={totalPending} label="In Queue" icon={Clock} color="text-[hsl(var(--warning))]" bg="bg-[hsl(var(--warning))]/10" />
         <StatCard loading={loading} value={urgentCount} label="Waiting > 30 min" icon={AlertTriangle} color="text-[hsl(var(--destructive))]" bg="bg-[hsl(var(--destructive))]/10" />
-        <StatCard loading={loading} value={queue.length - urgentCount} label="Normal" icon={CheckCircle2} color="text-[hsl(var(--success))]" bg="bg-[hsl(var(--success))]/10" />
+        <StatCard loading={loading} value={filtered.length - urgentCount} label="Normal" icon={CheckCircle2} color="text-[hsl(var(--success))]" bg="bg-[hsl(var(--success))]/10" />
       </div>
 
       {/* Filters */}
