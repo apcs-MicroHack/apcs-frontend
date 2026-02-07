@@ -103,6 +103,15 @@ export default function OperatorReportsPage() {
     }))
   }, [summaryItems])
 
+  // Status bar data for horizontal bar chart
+  const statusBarData = useMemo(() => {
+    return statusData.map((d) => ({
+      status: d.name,
+      count: d.value,
+      fill: d.color,
+    }))
+  }, [statusData])
+
   // Summary stats (from summary for accurate counts)
   const totalProcessed = totalInRange
   const approvedCount = summaryItems
@@ -194,6 +203,35 @@ export default function OperatorReportsPage() {
                 ))}
               </div>
             </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Status Bar Chart */}
+      <Card className="border-border bg-card">
+        <CardHeader className="pb-2">
+          <CardTitle className="font-heading text-base font-semibold text-foreground">Status Breakdown</CardTitle>
+          <CardDescription>Booking counts by status</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loading ? <Skeleton className="h-[200px] w-full" /> : statusBarData.length === 0 ? (
+            <p className="py-12 text-center text-sm text-muted-foreground">No data for this period.</p>
+          ) : (
+            <ChartContainer config={terminalChartConfig} className="h-[200px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={statusBarData} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(214, 20%, 88%)" horizontal={false} />
+                  <XAxis type="number" tick={{ fontSize: 12, fill: "hsl(215, 15%, 45%)" }} tickLine={false} axisLine={false} allowDecimals={false} />
+                  <YAxis type="category" dataKey="status" tick={{ fontSize: 11, fill: "hsl(215, 15%, 45%)" }} tickLine={false} axisLine={false} width={80} />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Bar dataKey="count" radius={[0, 4, 4, 0]} barSize={20}>
+                    {statusBarData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.fill} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartContainer>
           )}
         </CardContent>
       </Card>

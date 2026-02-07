@@ -11,6 +11,7 @@ import {
   YAxis,
   CartesianGrid,
   ResponsiveContainer,
+  Legend,
 } from "recharts"
 import { Calendar, AlertCircle } from "lucide-react"
 import {
@@ -65,6 +66,19 @@ const STATUS_LABELS: Record<BookingStatus, string> = {
 
 const terminalChartConfig = {
   bookings: { label: "Bookings", color: "hsl(210, 65%, 45%)" },
+}
+
+const statusBarChartConfig = {
+  count: { label: "Count", color: "hsl(185, 60%, 42%)" },
+}
+
+const terminalStatusChartConfig = {
+  CONFIRMED: { label: "Confirmed", color: "hsl(145, 63%, 42%)" },
+  CONSUMED: { label: "Consumed", color: "hsl(210, 65%, 45%)" },
+  PENDING: { label: "Pending", color: "hsl(38, 92%, 50%)" },
+  REJECTED: { label: "Rejected", color: "hsl(0, 72%, 51%)" },
+  CANCELLED: { label: "Cancelled", color: "hsl(215, 15%, 65%)" },
+  EXPIRED: { label: "Expired", color: "hsl(215, 15%, 50%)" },
 }
 
 // ── Date range helpers ───────────────────────────────────────
@@ -141,6 +155,36 @@ export default function AdminReportsPage() {
       .filter((d) => d.value > 0)
   }, [summaryItems])
 
+  // Status bar data for horizontal bar chart
+  const statusBarData = useMemo(() => {
+    return statusData.map((d) => ({
+      status: d.name,
+      count: d.value,
+      fill: d.color,
+    }))
+  }, [statusData])
+
+  // Terminal breakdown by status (for stacked bar chart)
+  const terminalStatusData = useMemo(() => {
+    const terminalMap = new Map<string, Record<string, number>>()
+    for (const s of summaryItems) {
+      const name = s.terminal?.name ?? "Unknown"
+      if (!terminalMap.has(name)) {
+        terminalMap.set(name, { CONFIRMED: 0, CONSUMED: 0, PENDING: 0, REJECTED: 0, CANCELLED: 0, EXPIRED: 0 })
+      }
+      const entry = terminalMap.get(name)!
+      entry[s.status] = (entry[s.status] ?? 0) + s.count
+    }
+    return Array.from(terminalMap.entries())
+      .map(([terminal, counts]) => ({
+        terminal,
+        ...counts,
+        total: Object.values(counts).reduce((a, b) => a + b, 0),
+      }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 6)
+  }, [summaryItems])
+
   // Summary stats (uses totalInRange from API summary for accurate totals)
   const summary = useMemo(() => {
     const total = totalInRange
@@ -200,6 +244,10 @@ export default function AdminReportsPage() {
         </div>
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           <Skeleton className="h-[360px] lg:col-span-2 rounded-lg" />
+          <Skeleton className="h-[360px] rounded-lg" />
+        </div>
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <Skeleton className="h-[360px] rounded-lg" />
           <Skeleton className="h-[360px] rounded-lg" />
         </div>
       </div>
@@ -311,6 +359,82 @@ export default function AdminReportsPage() {
                         <span className="text-xs text-muted-foreground">{item.name}</span>
                       </div>
                       <span className="text-xs font-medium text-foreground">{item.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Charts Row 2: Status Bar Chart + Terminal Status Breakdown */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        {/* Status Counts Bar Chart */}
+        <Card className="border-border bg-card">
+          <CardHeader className="pb-2">
+            <CardTitle className="font-heading text-base font-semibold text-foreground">
+              Status Breakdown
+            </CardTitle>
+            <CardDescription>Booking counts by status</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {statusBarData.length === 0 ? (
+              <EmptyChart label="No status data" />
+            ) : (
+              <ChartContainer config={statusBarChartConfig} className="h-[280px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={statusBarData} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(214, 20%, 88%)" horizontal={false} />
+                    <XAxis type="number" tick={{ fontSize: 12, fill: "hsl(215, 15%, 45%)" }} tickLine={false} axisLine={false} allowDecimals={false} />
+                    <YAxis type="category" dataKey="status" tick={{ fontSize: 11, fill: "hsl(215, 15%, 45%)" }} tickLine={false} axisLine={false} width={80} />
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <Bar dataKey="count" radius={[0, 4, 4, 0]} barSize={24}>
+                      {statusBarData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.fill} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </ChartContainer>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Terminal Status Breakdown (Stacked) */}
+        <Card className="border-border bg-card">
+          <CardHeader className="pb-2">
+            <CardTitle className="font-heading text-base font-semibold text-foreground">
+              Terminal Status Breakdown
+            </CardTitle>
+            <CardDescription>Status distribution per terminal</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {terminalStatusData.length === 0 ? (
+              <EmptyChart label="No terminal data" />
+            ) : (
+              <>
+                <ChartContainer config={terminalStatusChartConfig} className="h-[240px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={terminalStatusData} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(214, 20%, 88%)" vertical={false} />
+                      <XAxis dataKey="terminal" tick={{ fontSize: 10, fill: "hsl(215, 15%, 45%)" }} tickLine={false} axisLine={false} />
+                      <YAxis tick={{ fontSize: 12, fill: "hsl(215, 15%, 45%)" }} tickLine={false} axisLine={false} allowDecimals={false} />
+                      <ChartTooltip content={<ChartTooltipContent />} />
+                      <Bar dataKey="CONFIRMED" stackId="a" fill="var(--color-CONFIRMED)" radius={[0, 0, 0, 0]} />
+                      <Bar dataKey="CONSUMED" stackId="a" fill="var(--color-CONSUMED)" radius={[0, 0, 0, 0]} />
+                      <Bar dataKey="PENDING" stackId="a" fill="var(--color-PENDING)" radius={[0, 0, 0, 0]} />
+                      <Bar dataKey="REJECTED" stackId="a" fill="var(--color-REJECTED)" radius={[0, 0, 0, 0]} />
+                      <Bar dataKey="CANCELLED" stackId="a" fill="var(--color-CANCELLED)" radius={[0, 0, 0, 0]} />
+                      <Bar dataKey="EXPIRED" stackId="a" fill="var(--color-EXPIRED)" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </ChartContainer>
+                <div className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
+                  {(Object.keys(STATUS_COLORS) as BookingStatus[]).map((status) => (
+                    <div key={status} className="flex items-center gap-1.5">
+                      <div className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: STATUS_COLORS[status] }} />
+                      <span className="text-[10px] text-muted-foreground">{STATUS_LABELS[status]}</span>
                     </div>
                   ))}
                 </div>

@@ -110,6 +110,15 @@ export default function CarrierReportsPage() {
       .slice(0, 5)
   }, [summaryItems])
 
+  // Status bar data for horizontal bar chart
+  const statusBarData = useMemo(() => {
+    return statusData.map((d) => ({
+      status: d.name,
+      count: d.value,
+      fill: d.color,
+    }))
+  }, [statusData])
+
   // Summary stats (from summary for accurate counts)
   const summary = useMemo(() => {
     const total = totalInRange
@@ -197,7 +206,7 @@ export default function CarrierReportsPage() {
       </div>
 
       {/* Summary Stats */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <Card className="border-border bg-card">
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground">Total Bookings</p>
@@ -214,6 +223,12 @@ export default function CarrierReportsPage() {
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground">Completion Rate</p>
             <p className="mt-1 text-2xl font-bold text-foreground">{summary.rate}%</p>
+          </CardContent>
+        </Card>
+        <Card className="border-border bg-card">
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground">Confirm Rate</p>
+            <p className="mt-1 text-2xl font-bold text-foreground">{summary.confirmRate}%</p>
           </CardContent>
         </Card>
       </div>
@@ -270,6 +285,35 @@ export default function CarrierReportsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Status Bar Chart (full width) */}
+      <Card className="border-border bg-card">
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+            <BarChart3 className="h-4 w-4 text-[hsl(210,65%,45%)]" /> Status Breakdown
+          </CardTitle>
+          <CardDescription className="text-xs">Booking counts by status</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {statusBarData.length === 0 ? (
+            <p className="py-10 text-center text-xs text-muted-foreground">No data</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={statusBarData} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
+                <XAxis type="number" tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
+                <YAxis type="category" dataKey="status" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" width={80} />
+                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                <Bar dataKey="count" radius={[0, 4, 4, 0]} barSize={20}>
+                  {statusBarData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.fill} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }
